@@ -30,13 +30,13 @@ If you manage tool dependencies using the `asdf` runtime manager, you can automa
 
 ```bash
 # 1. Register the custom version controller plugin repository
-asdf plugin add spinel https://github.com
+asdf plugin add spinel https://github.com/jockofcode/asdf-spinel
 
 # 2. Extract and compile the latest stable automated edge version 
 asdf install spinel latest
 
 # 3. Bind the local workspace explicitly to use the compiled toolchain
-asdf local spinel latest
+asdf set spinel master
 ```
 
 ### Option B: Building from Matz's Source Repository
@@ -44,7 +44,7 @@ If you prefer tracking upstream changes directly out of the primary engineering 
 
 ```bash
 # 1. Clone the master code storage natively
-git clone https://github.com
+git clone https://github.com/matz/spinel.git 
 cd spinel
 
 # 2. Build the parser components and the compiler static runtime library (libspinel_rt.a)

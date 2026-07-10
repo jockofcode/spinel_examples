@@ -2,11 +2,17 @@
 require_relative "native_net"
 
 port = 8080
-if ARGV.length > 0
-  first_arg = ARGV[0]
-  if first_arg
-    port = first_arg.to_i
+arg_index = 0
+while arg_index < ARGV.length
+  arg = ARGV[arg_index]
+  if arg == "-p"
+    port_arg = ARGV[arg_index + 1]
+    if port_arg
+      port = port_arg.to_i
+      arg_index = arg_index + 1
+    end
   end
+  arg_index = arg_index + 1
 end
 
 def sanitize_path(raw_path)
@@ -149,4 +155,3 @@ def start_server(port)
 end
 
 start_server(port)
-

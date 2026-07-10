@@ -1,10 +1,20 @@
 # routing_server.rb
 require_relative "native_net"
 
-# 1. Parse the port from command-line arguments (default to 8080 if not provided)
-# Spinel's ARGV acts as a standard array of strings parsed natively from main()
-port_arg = ARGV[0]
-port = port_arg ? port_arg.to_i : 8080
+# 1. Parse command-line flags.
+port = 8080
+arg_index = 0
+while arg_index < ARGV.length
+  arg = ARGV[arg_index]
+  if arg == "-p"
+    port_arg = ARGV[arg_index + 1]
+    if port_arg
+      port = port_arg.to_i
+      arg_index = arg_index + 1
+    end
+  end
+  arg_index = arg_index + 1
+end
 
 def build_directory_list(dir_path, requested_path)
   # Ensure the visual path string ends with a slash for clean links
@@ -95,4 +105,3 @@ def start_server(port)
 end
 
 start_server(port)
-

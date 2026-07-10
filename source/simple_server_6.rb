@@ -2,11 +2,20 @@
 require_relative "native_net"
 
 port = 8080
-if ARGV.length > 0
-  arg_str = ARGV[0].to_s
-  if arg_str != ""
-    port = arg_str.to_i
+serve_index = true
+arg_index = 0
+while arg_index < ARGV.length
+  arg = ARGV[arg_index]
+  if arg == "-p"
+    port_arg = ARGV[arg_index + 1]
+    if port_arg
+      port = port_arg.to_i
+      arg_index = arg_index + 1
+    end
+  elsif arg == "--no-index"
+    serve_index = false
   end
+  arg_index = arg_index + 1
 end
 
 def sanitize_path(raw_path)
@@ -125,7 +134,7 @@ def serve_file_payload(local_path)
   ["200 OK", content_type, disposition, body]
 end
 
-def handle_request(path)
+def handle_request(path, serve_index)
   safe_url_path = sanitize_path(path)
   local_path = ".#{safe_url_path}"
 
@@ -140,7 +149,7 @@ def handle_request(path)
     separator = local_path.end_with?("/") ? "" : "/"
     index_html_path = "#{local_path}#{separator}index.html"
     
-    if File.exist?(index_html_path) && !File.directory?(index_html_path)
+    if serve_index && File.exist?(index_html_path) && !File.directory?(index_html_path)
       # Silently route to the index.html payload instead of displaying a directory listing
       return serve_file_payload(index_html_path)
     else
@@ -152,7 +161,7 @@ def handle_request(path)
   end
 end
 
-def start_server(port)
+def start_server(port, serve_index)
   server_fd = NativeNet.sp_net_listen(port, 1)
   if server_fd < 0
     puts "Failed to bind to port #{port}."
@@ -173,7 +182,7 @@ def start_server(port)
     path = parts[1] || "/"
     path = path.split("?")[0] || "/"
 
-    status, content_type, disposition, body = handle_request(path)
+    status, content_type, disposition, body = handle_request(path, serve_index)
 
     response = "HTTP/1.1 #{status}\r\n" \
                "Content-Type: #{content_type}\r\n" \
@@ -188,5 +197,4 @@ def start_server(port)
   end
 end
 
-start_server(port)
-
+start_server(port, serve_index)

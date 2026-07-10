@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FyelSrvr Node — Next-Gen Decentralized Asset Architecture</title>
+    <style>
+        :root {
+            --bg-primary: #0b0f19;
+            --bg-secondary: #161c2d;
+            --accent-glow: #3b82f6;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #24304f;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        header {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-box {
+            display: flex;
+            align-items: center;
+            font-weight: 700;
+            font-size: 1.25rem;
+            letter-spacing: -0.05em;
+            color: #ffffff;
+        }
+
+        .logo-box svg {
+            margin-right: 0.5rem;
+            animation: pulse 3s infinite ease-in-out;
+        }
+
+        .hero {
+            max-width: 1000px;
+            margin: 4rem auto 6rem auto;
+            text-align: center;
+            padding: 0 1.5rem;
+        }
+
+        .badge {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1));
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #60a5fa;
+            display: inline-block;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.15;
+            margin: 0 0 1.5rem 0;
+            background: linear-gradient(to right, #ffffff, #93c5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            max-width: 700px;
+            margin: 0 auto 3rem auto;
+        }
+
+        .cta-group {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.85rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-glow);
+            color: #ffffff;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-primary:hover {
+            background-color: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--bg-secondary);
+            border-color: #4b5563;
+        }
+
+        .grid {
+            max-width: 1200px;
+            margin: 0 auto 6rem auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            padding: 0 2rem;
+        }
+
+        .card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            padding: 2.5rem;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .card h3 {
+            font-size: 1.5rem;
+            margin: 1rem 0;
+            font-weight: 700;
+        }
+
+        .card p {
+            color: var(--text-muted);
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .icon-wrapper {
+            background-color: rgba(59, 130, 246, 0.1);
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-glow);
+        }
+
+        footer {
+            border-top: 1px solid var(--border-color);
+            padding: 3rem 2rem;
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.05); opacity: 1; }
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="feather feather-layers"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+            FYELSRVR//NODE
+        </div>
+    </header>
+
+    <section class="hero">
+        <span class="badge">Spinel Native Architecture — Ahead-of-Time C Engine</span>
+        <h1>The Zero-Overhead Server Solving the VM Bloat Problem</h1>
+        <p>Traditional asset delivery forces you to scale heavy runtime VMs, interpreter baggage, and bloated thread pools just to serve basic files. <strong>FyelSrvr</strong> compiles down straight to clean, static C binary structures.</p>
+        <div class="cta-group">
+            <!-- Download Button points directly to the requested spinel_examples path -->
+            <a href="https://github.com" target="_blank" class="btn btn-primary">Download FyelSrvr</a>
+            <!-- Specs Button links directly to official repository phrased exactly as requested -->
+            <a href="https://github.com" target="_blank" class="btn btn-secondary">More info about the Spinel compiler</a>
+        </div>
+    </section>
+
+    <section class="grid">
+        <div class="card">
+            <div class="icon-wrapper">
+                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            </div>
+            <h3>Micro-Second Latency</h3>
+            <p>Bypasses dynamic method dispatches, GC latency spikes, and virtual machine layers. FyelSrvr links directly to kernel networks using specialized POSIX abstractions.</p>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper">
+                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            </div>
+            <h3>Traversal Isolation</h3>
+            <p>Engineered with array-stack stream sanitation. Incoming routes pass verification boundaries that dismantle nesting exploits before local system file allocations resolve.</p>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper">
+                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            </div>
+            <h3>Dynamic Content Negotiation</h3>
+            <p>Automatically determines downstream streaming policies. Recognizes standard inline formats natively while transforming raw binaries into strict attachment downloads.</p>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2026 FyelSrvr Core. Compiled using pure AOT whole-program type inference.</p>
+    </footer>
+
+</body>
+</html>
+

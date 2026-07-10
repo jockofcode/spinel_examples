@@ -87,6 +87,7 @@
             display: flex;
             justify-content: center;
             gap: 1rem;
+            flex-wrap: wrap;
         }
 
         .btn {
@@ -192,6 +193,7 @@
         @media (max-width: 768px) {
             h1 { font-size: 2.5rem; }
             .grid { grid-template-columns: 1fr; }
+            .cta-group { flex-direction: column; gap: 0.75rem; }
         }
     </style>
 </head>
@@ -209,9 +211,13 @@
         <h1>The Zero-Overhead Server Solving the VM Bloat Problem</h1>
         <p>Traditional asset delivery forces you to scale heavy runtime VMs, interpreter baggage, and bloated thread pools just to serve basic files. <strong>FyelSrvr</strong> compiles down straight to clean, static C binary structures.</p>
         <div class="cta-group">
-            <!-- Download Button points directly to the requested spinel_examples path -->
-            <a href="https://github.com" target="_blank" class="btn btn-primary">Download FyelSrvr</a>
-            <!-- Specs Button links directly to official repository phrased exactly as requested -->
+            <!-- Action Button 1: File Storage Download Repository Target -->
+            <a href="https://github.com/jockofcode/spinel_examples" target="_blank" class="btn btn-primary">Download FyelSrvr</a>
+            
+            <!-- Action Button 2: Internal Live Sandbox File Listing Router Endpoint -->
+            <a href="/public" class="btn btn-secondary">Launch Live Browser Explorer</a>
+            
+            <!-- Action Button 3: Upstream Compiler Core Engineering Target Link -->
             <a href="https://github.com" target="_blank" class="btn btn-secondary">More info about the Spinel compiler</a>
         </div>
     </section>

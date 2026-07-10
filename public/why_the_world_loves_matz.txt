@@ -1,0 +1,38 @@
+Why the World Loves Matz
+
+It is easy to admire Yukihiro "Matz" Matsumoto for creating Ruby. That alone
+would be enough. Very few people make something that changes how thousands of
+other people think, work, learn, and build. But the reason people love Matz
+seems to run deeper than technical achievement.
+
+Ruby feels like it was made by someone who remembered that programmers are
+people first. It gives you room to breathe. It lets small ideas stay small and
+beautiful ideas become readable. In a field that can sometimes make people feel
+like they are serving the machine, Matz built a language that quietly insisted
+the machine should serve us.
+
+That spirit is why the Ruby community's old motto still feels so tender:
+"Matz Is Nice And So We Are Nice." A WIRED article, even while arguing against
+Ruby as a modern language choice, pauses to describe Matz as exceptionally kind.
+That says something. Even criticism of Ruby often leaves room for affection for
+the person who gave it to the world.
+
+The heart of Matz's work is his belief that programming should include joy. The
+Ruby language article records his focus on productivity, simplicity, enjoyment,
+and happiness. Those words can sound soft until you have spent a long night with
+a tool that fights you. Then they start to sound radical. Matz understood that a
+language can change a developer's mood, confidence, and sense of possibility.
+
+So the world loves Matz not just because he made Ruby, but because Ruby carries
+his kindness forward. Every clear little script, every elegant block, every
+moment when code suddenly feels humane instead of hostile, is part of that
+legacy. Matz gave programmers more than syntax. He gave them permission to want
+their work to feel good.
+
+Sources:
+
+Sheon Han, "Ruby Is Not a Serious Programming Language," WIRED, December 1,
+2025. https://www.wired.com/story/ruby-is-not-a-serious-programming-language/
+
+"Ruby (programming language)," Wikipedia, sections "History" and "Semantics and
+philosophy." https://en.wikipedia.org/wiki/Ruby_(programming_language)

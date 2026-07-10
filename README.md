@@ -1,93 +1,148 @@
-# FyelSrvr & Spinel Networking Examples
+# FyelSrvr and Spinel Networking Examples
 
-This repository contains step-by-step progressive iterations of a dependency-free, high-performance static file and routing web server (**FyelSrvr**) compiled natively using Matz's experimental Ahead-of-Time (AOT) type-inferred Ruby compiler, **Spinel**.
+This repository demonstrates how to write small Ruby programs for the
+[Spinel](https://github.com/matz/spinel) ahead-of-time compiler. The examples
+build up from raw native socket bindings to a compiled static-file server named
+FyelSrvr.
 
-## Project Architecture
+The final example compiles to a standalone native executable and does not need a
+Ruby VM at runtime.
+
+## Project Layout
 
 ```text
 .
-├── README.md               # Setup and compilation blueprints
-├── index.html              # Branded FyelSrvr premium marketing landing page
-├── public/                 # Test directory for streaming file and folder indexes
+├── README.md
+├── .tool-versions          # asdf pin for Spinel
+├── index.html              # page served automatically at /
+├── public/                 # empty test directory for directory listings
 └── source/
-    ├── native_net.rb       # Clean architecture low-level C sp_net FFI bindings
-    ├── simple_server_1.rb  # Iteration 1: Native POSIX FFI binding concept
-    ├── simple_server_2.rb  # Iteration 2: Core sp_net namespace mapping
-    ├── simple_server_3.rb  # Iteration 3: Safe binary string (:binstr) buffer reads
-    ├── simple_server_4.rb  # Iteration 4: Static File system POSIX integration
-    ├── simple_server_5.rb  # Iteration 5: Strict type-narrowing for ARGV inputs
-    └── simple_server_6.rb  # Final FyelSrvr Engine: Secure traversal stack & index routing
+    ├── native_net.rb       # shared Spinel FFI bindings for sp_net helpers
+    ├── simple_server_1.rb  # raw POSIX socket extern declarations
+    ├── simple_server_2.rb  # sp_net FFI functions under NativeNet
+    ├── simple_server_3.rb  # request parsing and simple route handling
+    ├── simple_server_4.rb  # static file and directory serving
+    ├── simple_server_5.rb  # path sanitizing and content disposition handling
+    └── simple_server_6.rb  # final server with index.html and file-size listings
 ```
 
----
+`fyel_srvr` is a generated binary. Rebuild it from `source/simple_server_6.rb`
+when needed.
 
-## 1. Getting the Spinel Compiler
+## Install Spinel
 
-You can provision the static compiler toolchain via two distinct deployment methodologies:
+### Option A: asdf
 
-### Option A: Automated installation via `asdf` (Recommended)
-If you manage tool dependencies using the `asdf` runtime manager, you can automate your binary compilation tracking flags using the community plugin tool:
+This project includes `.tool-versions` with `spinel master`.
 
 ```bash
-# 1. Register the custom version controller plugin repository
 asdf plugin add spinel https://github.com/jockofcode/asdf-spinel
+asdf install
+```
 
-# 2. Extract and compile the latest stable automated edge version 
-asdf install spinel latest
+If you are not using this repository's `.tool-versions` file, install and select
+the same version explicitly:
 
-# 3. Bind the local workspace explicitly to use the compiled toolchain
+```bash
+asdf install spinel master
 asdf set spinel master
 ```
 
-### Option B: Building from Matz's Source Repository
-If you prefer tracking upstream changes directly out of the primary engineering core workspace:
+### Option B: Build Spinel from source
 
 ```bash
-# 1. Clone the master code storage natively
-git clone https://github.com/matz/spinel.git 
+git clone https://github.com/matz/spinel.git
 cd spinel
-
-# 2. Build the parser components and the compiler static runtime library (libspinel_rt.a)
 make
-
-# 3. Export the compiled path binary string globally onto your system profile
-export PATH="\(PWD/bin:\)PATH"
+export PATH="$PWD/bin:$PATH"
 cd -
 ```
 
----
+## Compile and Run
 
-## 2. Compilation and Execution
+Spinel compiles the entry-point Ruby file and follows local `require_relative`
+dependencies such as `source/native_net.rb`.
 
-Because Spinel parses your whole program type graph down to pure, direct C layout maps before leveraging your system's `clang` or `gcc` compiler, you only need to supply the main script entry-point to the compiler. The tool resolves local `require_relative` directives autonomously.
-
-### Compiling a Specific Iteration
-To build the final feature-complete, secure **FyelSrvr** assembly loop (`simple_server_6.rb`):
+Compile the final server:
 
 ```bash
-# Invoke the static compilation pipeline targeting a native machine binary
-spinel compile source/simple_server_6.rb -o fyel_srvr
+spinel source/simple_server_6.rb -o fyel_srvr
 ```
 
-### Running the Standalone Native Executable
-Once compiled, your binary operates autonomously with **zero reliance on a Ruby Virtual Machine**.
+Run it on the default port:
 
 ```bash
-# Boot the application server binary (Optionally passing a custom port number argument)
+./fyel_srvr
+```
+
+Run it on a custom port:
+
+```bash
 ./fyel_srvr 8080
 ```
 
----
+You can also compile and run in one step while experimenting:
 
-## 3. Verifying Server Operations
+```bash
+spinel -E source/simple_server_6.rb 8080
+```
 
-Once the native binary engine is listening on your local socket, perform the following validation workflows via your web browser or command-line utility tools:
+## Example Progression
 
-1. **Branded Marketing Landing Page:** Navigate to `http://localhost:8080/`. The system auto-detects your custom `index.html` structure and bypasses raw folder indexing layout engines.
-2. **SVG File Listing and Sizes:** Create assets inside your `./public` testing space and load `http://localhost:8080/public`. The server displays clean vector SVG indicators alongside human-readable integer space filesizes down to a decimal point (e.g., `4.2 KB`).
-3. **Directory Traversal Verification:** Test the safety boundary layers directly to confirm path stack sanitation blocks root escape attempts:
-   ```bash
-   curl --path-as-is http://localhost:8080/../../etc/passwd
-   ```
-   *Expected Outcome: Returns a structured `404 Not Found` response payload without escaping your sandbox folder containment space.*
+- `simple_server_1.rb` declares C/POSIX socket functions with top-level
+  `extern` declarations and serves a fixed HTML response.
+- `simple_server_2.rb` switches to Spinel `ffi_func` bindings for the `sp_net`
+  helper functions.
+- `simple_server_3.rb` uses `sp_net_recv_some` with a `:binstr` return type,
+  parses the HTTP request line, and serves a few in-code routes.
+- `simple_server_4.rb` adds filesystem access with `File` and `Dir` APIs,
+  including simple directory listings and basic content types.
+- `simple_server_5.rb` adds URL path sanitizing, more content types, and
+  `Content-Disposition` handling for inline web files versus downloads.
+- `simple_server_6.rb` adds automatic `index.html` serving for directories,
+  parent-directory links, SVG icons, and human-readable file sizes.
 
+## Verify the Final Server
+
+After starting the server:
+
+```bash
+./fyel_srvr 8080
+```
+
+Check the landing page:
+
+```bash
+curl -i http://localhost:8080/
+```
+
+Expected result: `200 OK` with `Content-Type: text/html`, serving the repository
+root `index.html`.
+
+Check the directory listing:
+
+```bash
+curl -i http://localhost:8080/public
+```
+
+Expected result: `200 OK` with an HTML directory index. The checked-in
+`public/` directory is empty, so the listing shows only the parent-directory
+entry until you add test files.
+
+Check traversal handling:
+
+```bash
+curl -i --path-as-is http://localhost:8080/../../etc/passwd
+```
+
+Expected result: `404 Not Found`. The final server normalizes path segments
+before resolving them under the current working directory.
+
+## Notes
+
+- Run the server from the repository root. The final example resolves paths
+  relative to the current working directory.
+- The server is intentionally small and educational. It handles one accepted
+  connection at a time and reads up to 2048 bytes from each request.
+- The SVG snippets in the directory listing use `http://w3.org` as written in
+  the examples.

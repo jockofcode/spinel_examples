@@ -20,7 +20,7 @@ end
 def start_server(port)
   begin
     TCPServer.open("0.0.0.0", port) do |server|
-      puts "Server listening natively on http://localhost:#{port}"
+      puts "Server listening natively."
 
       loop do
         respond_to_client(server.accept)

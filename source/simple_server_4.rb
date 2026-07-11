@@ -97,7 +97,7 @@ end
 def start_server(port)
   begin
     TCPServer.open("0.0.0.0", port) do |server|
-      puts "Static server running natively on http://localhost:#{port}"
+      puts "Static server running natively."
 
       loop do
         respond_to_client(server.accept)

@@ -56,7 +56,7 @@ end
 def start_server(port)
   begin
     TCPServer.open("0.0.0.0", port) do |server|
-      puts "Advanced routing server live at http://localhost:#{port}"
+      puts "Advanced routing server live."
 
       loop do
         respond_to_client(server.accept)

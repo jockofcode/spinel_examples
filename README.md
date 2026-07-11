@@ -15,7 +15,7 @@ static-file server that compiles to a standalone binary.
 ├── index.html
 ├── public/
 └── source/
-    ├── native_net.rb
+    ├── socket_shim.rb
     ├── simple_server_1.rb
     ├── simple_server_2.rb
     ├── simple_server_3.rb
@@ -70,13 +70,15 @@ spinel -E source/simple_server_6.rb -p 8080
 ## The Examples
 
 - `simple_server_1.rb`: raw POSIX socket bindings with `extern`
-- `simple_server_2.rb`: `sp_net` bindings through `ffi_func`
+- `simple_server_2.rb`: a tiny HTTP response with Ruby-shaped `TCPServer`
 - `simple_server_3.rb`: request parsing and a few hard-coded routes
 - `simple_server_4.rb`: `-p`, static files, and directory listings
 - `simple_server_5.rb`: `-p`, path cleanup, more content types, downloads
 - `simple_server_6.rb`: `-p`, `--no-index`, parent links, icons, file sizes
 
-`native_net.rb` holds the shared `sp_net` bindings used by the later examples.
+`socket_shim.rb` is the small compatibility layer that lets the later
+examples run under CRuby with `socket` and under Spinel with the same
+`TCPServer` / `TCPSocket` calls.
 
 ## Try It
 

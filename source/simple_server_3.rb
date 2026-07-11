@@ -1,23 +1,12 @@
 # simple_server_3.rb
 
-require_relative "native_net.rb"
+require_relative "socket_shim"
 
-def start_server(port)
-  server_fd = NativeNet.sp_net_listen(port, 1)
-  if server_fd < 0
-    puts "Failed to bind to port #{port}."
-    return
-  end
-
-  puts "Advanced routing server live at http://localhost:#{port}"
-
-  loop do
-    client_fd = NativeNet.sp_net_accept(server_fd)
-    next if client_fd < 0
-
-    # Read up to 2048 bytes cleanly. 
+def respond_to_client(client)
+  begin
+    # Read up to 2048 bytes cleanly.
     # Because of :binstr, this returns a robust Ruby String containing the full payload.
-    raw_request = NativeNet.sp_net_recv_some(client_fd, 2048)
+    raw_request = client.recv(2048)
 
     # 1. Parse the HTTP Request Line (e.g., "GET /about HTTP/1.1\r\n")
     # We split by carriage return/line feed to isolate the first line.
@@ -58,10 +47,25 @@ def start_server(port)
                "#{body}"
 
     # Return response payload and terminate the socket context
-    NativeNet.sp_net_write_str(client_fd, response)
-    NativeNet.sp_net_close(client_fd)
+    client.write(response)
+  ensure
+    client.close
+  end
+end
+
+def start_server(port)
+  begin
+    TCPServer.open("0.0.0.0", port) do |server|
+      puts "Advanced routing server live at http://localhost:#{port}"
+
+      loop do
+        respond_to_client(server.accept)
+      end
+    end
+  rescue
+    puts "Failed to bind to port #{port}."
+    return
   end
 end
 
 start_server(8080)
-

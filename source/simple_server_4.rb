@@ -1,5 +1,5 @@
 # routing_server.rb
-require_relative "native_net"
+require_relative "socket_shim"
 
 # 1. Parse command-line flags.
 port = 8080
@@ -65,20 +65,9 @@ def handle_request(path)
   end
 end
 
-def start_server(port)
-  server_fd = NativeNet.sp_net_listen(port, 1)
-  if server_fd < 0
-    puts "Failed to bind to port #{port}."
-    return
-  end
-
-  puts "Static server running natively on http://localhost:#{port}"
-
-  loop do
-    client_fd = NativeNet.sp_net_accept(server_fd)
-    next if client_fd < 0
-
-    raw_request = NativeNet.sp_net_recv_some(client_fd, 2048)
+def respond_to_client(client)
+  begin
+    raw_request = client.recv(2048)
     lines = raw_request.split("\r\n")
     request_line = lines[0] || ""
 
@@ -99,8 +88,24 @@ def start_server(port)
                "\r\n" \
                "#{body}"
 
-    NativeNet.sp_net_write_str(client_fd, response)
-    NativeNet.sp_net_close(client_fd)
+    client.write(response)
+  ensure
+    client.close
+  end
+end
+
+def start_server(port)
+  begin
+    TCPServer.open("0.0.0.0", port) do |server|
+      puts "Static server running natively on http://localhost:#{port}"
+
+      loop do
+        respond_to_client(server.accept)
+      end
+    end
+  rescue
+    puts "Failed to bind to port #{port}."
+    return
   end
 end
 

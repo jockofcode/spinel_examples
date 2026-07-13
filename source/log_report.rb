@@ -50,8 +50,7 @@ end
 # count first, breaking ties by key so the output is fully deterministic --
 # identical under CRuby and the Spinel binary regardless of sort stability.
 def sorted_by_count_desc(counts)
-  pairs = []
-  counts.each { |k, v| pairs.push([k, v]) }
+  pairs = counts.to_a
   pairs.sort_by { |pair| [-pair[1], pair[0]] }
 end
 
@@ -113,9 +112,7 @@ puts ""
 
 puts "Requests by status code:"
 # Sort by the status code itself so 200/301/404/500 read in natural order.
-status_keys = []
-status_counts.each { |k, _v| status_keys.push(k) }
-status_keys.sort.each do |code|
+status_counts.keys.sort.each do |code|
   puts "  #{code.ljust(4)} #{status_counts[code].to_s.rjust(4)}"
 end
 puts ""

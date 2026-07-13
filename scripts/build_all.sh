@@ -6,7 +6,11 @@
 # only if every build and every check passed. Run it live at the meetup and
 # before every commit.
 #
-# Usage: sh scripts/build_all.sh
+# Usage:
+#   sh scripts/build_all.sh          # fast build + smoke tests (the demo path)
+#   sh scripts/build_all.sh --full   # also run tests/run_app_tests.sh, the
+#                                     # thorough dual-runtime behavior suite
+#                                     # (TEST_ALL=1 has the same effect)
 # Assumes spinel, curl, and shasum are on PATH. Installs nothing.
 
 set -e
@@ -20,6 +24,11 @@ trap 'kill $PIDS 2>/dev/null || true' EXIT
 
 pass() { echo "ok   - $1"; }
 fail() { echo "FAIL - $1"; exit 1; }
+
+# Opt-in thorough suite: --full (or TEST_ALL=1) runs the full per-app tests
+# after the smoke checks. The default run stays fast for the live demo.
+RUN_FULL="${TEST_ALL:-0}"
+[ "$1" = "--full" ] && RUN_FULL=1
 
 mkdir -p bin
 
@@ -84,6 +93,18 @@ APP_HASH=$(grep 'source/todo_cli.rb' /tmp/ba_pd.txt | awk '{print $1}')
 REAL_HASH=$(shasum -a 256 source/todo_cli.rb | cut -c1-12)
 [ "$APP_HASH" = "$REAL_HASH" ] && pass "parallel_digest hash matches shasum ($APP_HASH)" \
   || fail "parallel_digest $APP_HASH != shasum $REAL_HASH"
+
+# --- thorough suite (opt-in) ----------------------------------------------
+# With --full, hand off to the full per-app behavior suite. It boots its own
+# servers on separate ports, so first stop the smoke-test servers to avoid any
+# port contention, then run the runner (it self-fails with a non-zero exit).
+if [ "$RUN_FULL" = "1" ]; then
+  kill $PIDS 2>/dev/null || true
+  PIDS=""
+  echo ""
+  echo "== full app test suite (tests/run_app_tests.sh) =="
+  sh tests/run_app_tests.sh || fail "app test suite"
+fi
 
 echo ""
 echo "ALL GREEN"

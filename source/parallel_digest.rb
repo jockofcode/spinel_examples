@@ -34,11 +34,11 @@ require "digest"
 # and concatenation dispatch reliably.
 def first_chars(str, n)
   out = ""
-  i = 0
-  s = "" + str
-  while i < n && i < s.length
-    out = out + s[i]
-    i += 1
+  char_index = 0
+  str_copy = "" + str
+  while char_index < n && char_index < str_copy.length
+    out = out + str_copy[char_index]
+    char_index += 1
   end
   out
 end
@@ -47,22 +47,22 @@ end
 # (same poly-string reason as first_chars: #split / #index / range slices are
 # unreliable on these values, but [] and concatenation are not).
 def split_tab(line)
-  s = "" + line
-  n = s.length
+  str_copy = "" + line
+  length = str_copy.length
   left = ""
   right = ""
-  seen = false
-  i = 0
-  while i < n
-    ch = s[i]
-    if !seen && ch == "\t"
-      seen = true
-    elsif seen
-      right = right + ch
+  seen_tab = false
+  char_index = 0
+  while char_index < length
+    char = str_copy[char_index]
+    if !seen_tab && char == "\t"
+      seen_tab = true
+    elsif seen_tab
+      right = right + char
     else
-      left = left + ch
+      left = left + char
     end
-    i += 1
+    char_index += 1
   end
   [left, right]
 end
@@ -151,19 +151,19 @@ end
 # first non-flag argument is the directory, -w N sets the worker count.
 dir = "."
 workers = 4
-i = 0
-while i < ARGV.length
-  arg = ARGV[i]
+arg_index = 0
+while arg_index < ARGV.length
+  arg = ARGV[arg_index]
   if arg == "-w"
-    wv = ARGV[i + 1]
-    if wv
-      workers = wv.to_i
-      i += 1
+    worker_value = ARGV[arg_index + 1]
+    if worker_value
+      workers = worker_value.to_i
+      arg_index += 1
     end
   else
     dir = arg
   end
-  i += 1
+  arg_index += 1
 end
 workers = 1 if workers < 1
 
@@ -189,7 +189,7 @@ mutex = Mutex.new
 # pops nil knows the work is done and exits its loop. (Queue#close would also
 # work -- pop returns nil on a drained, closed queue -- but explicit sentinels
 # make the one-pill-per-worker handshake obvious.)
-files.each { |f| queue << f }
+files.each { |file_path| queue << file_path }
 workers.times { queue << nil }
 
 # Spawn the worker pool. The block does nothing but call worker_loop, so no
@@ -202,7 +202,7 @@ workers.times do
 end
 
 # Wait for every worker to drain the queue and exit.
-threads.each { |t| t.join }
+threads.each { |thread| thread.join }
 
 # --- report ---------------------------------------------------------------
 

@@ -800,15 +800,13 @@ else
 
     def self.getifaddrs
       count = SpinelSocketNative.sx_ifaddr_count
-      results = []
-      index = 0
-      while index < count
+      (0...count).map do |index|
         family = SpinelSocketNative.sx_ifaddr_family(index)
         addr = __addrinfo_for_native_ip(family, SpinelSocketNative.sx_ifaddr_addr(index))
         netmask = __addrinfo_for_native_ip(family, SpinelSocketNative.sx_ifaddr_netmask(index))
         broadaddr = __addrinfo_for_native_ip(family, SpinelSocketNative.sx_ifaddr_broadaddr(index))
         dstaddr = __addrinfo_for_native_ip(family, SpinelSocketNative.sx_ifaddr_dstaddr(index))
-        results.push(Socket::Ifaddr.new(
+        Socket::Ifaddr.new(
           SpinelSocketNative.sx_ifaddr_name(index),
           SpinelSocketNative.sx_ifaddr_ifindex(index),
           SpinelSocketNative.sx_ifaddr_flags(index),
@@ -816,18 +814,12 @@ else
           netmask,
           broadaddr,
           dstaddr
-        ))
-        index = index + 1
+        )
       end
-      results
     end
 
     def self.ip_address_list
-      addrs = []
-      getifaddrs.each do |ifaddr|
-        addrs.push(ifaddr.addr) if ifaddr.addr
-      end
-      addrs
+      getifaddrs.map { |ifaddr| ifaddr.addr }.compact
     end
 
     def self.__addrinfo_for_native_ip(family, address)

@@ -38,7 +38,7 @@ end
 # even after tasks in the middle are removed.
 def next_id(tasks)
   max = 0
-  tasks.each { |t| max = t["id"] if t["id"] > max }
+  tasks.each { |task| max = task["id"] if task["id"] > max }
   max + 1
 end
 
@@ -66,10 +66,10 @@ def cmd_list(tasks)
     puts "No tasks yet. Add one with: todo_cli add \"...\""
     return
   end
-  tasks.each do |t|
-    marker = t["done"] ? "[x]" : "[ ]"
-    id_col = t["id"].to_s.rjust(3)
-    puts "#{id_col} #{marker} #{t['title']}"
+  tasks.each do |task|
+    marker = task["done"] ? "[x]" : "[ ]"
+    id_col = task["id"].to_s.rjust(3)
+    puts "#{id_col} #{marker} #{task['title']}"
   end
 end
 
@@ -78,7 +78,7 @@ end
 def find_task!(tasks, id_arg)
   id = id_arg.to_i
   task = nil
-  tasks.each { |t| task = t if t["id"] == id }
+  tasks.each { |candidate| task = candidate if candidate["id"] == id }
   if task.nil?
     STDERR.puts "error: no task with id #{id_arg}"
     exit 1
@@ -100,7 +100,7 @@ end
 def cmd_remove(path, tasks, id_arg)
   task = find_task!(tasks, id_arg)
   remaining = []
-  tasks.each { |t| remaining.push(t) unless t["id"] == task["id"] }
+  tasks.each { |task_item| remaining.push(task_item) unless task_item["id"] == task["id"] }
   save_tasks(path, remaining)
   puts "Removed ##{task['id']}: #{task['title']}"
 end
@@ -109,7 +109,7 @@ end
 # explicit loop for the same poly-array reason as cmd_remove.
 def cmd_clear(path, tasks)
   remaining = []
-  tasks.each { |t| remaining.push(t) unless t["done"] }
+  tasks.each { |task_item| remaining.push(task_item) unless task_item["done"] }
   removed = tasks.length - remaining.length
   save_tasks(path, remaining)
   puts "Cleared #{removed} completed task(s)"
@@ -125,14 +125,14 @@ end
 # collect the remaining non-flag tokens as the command and its argument.
 data_file = "todo.json"
 positional = []
-i = 0
-while i < ARGV.length
-  arg = ARGV[i]
+arg_index = 0
+while arg_index < ARGV.length
+  arg = ARGV[arg_index]
   if arg == "-f" || arg == "--file"
-    nextval = ARGV[i + 1]
-    if nextval
-      data_file = "#{nextval}"
-      i += 1
+    file_value = ARGV[arg_index + 1]
+    if file_value
+      data_file = "#{file_value}"
+      arg_index += 1
     end
   elsif arg == "-h" || arg == "--help"
     puts "Usage: todo_cli [options] COMMAND [args]"
@@ -143,7 +143,7 @@ while i < ARGV.length
   else
     positional.push(arg)
   end
-  i += 1
+  arg_index += 1
 end
 
 command = positional[0]

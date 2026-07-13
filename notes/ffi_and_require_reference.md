@@ -132,6 +132,105 @@ Keep this style only when the lesson is raw FFI. For practical examples, prefer
 the `socket_shim.rb` compatibility layer because it hides sockaddr packing
 and keeps the example source close to CRuby.
 
+## Bringing Your Own C (custom native code + `--link`)
+
+Everything above binds symbols that already exist in the Spinel runtime
+(`sp_net_*`, `sp_crypto_*`) or in libc. You can also compile **your own** C file
+into the binary and call it from Ruby with the same `ffi_func` DSL. This repo
+does exactly that in `native/socket_ext/socket_ext.c` (bound by
+`source/socket_shim.rb`), so use it as the reference.
+
+### The mechanism
+
+The `spinel` compiler has a repeatable `--link` flag:
+
+```
+--link ARG   Extra link input (object/archive/-lLIB); repeatable
+```
+
+`ARG` can be a `.c` source, a `.o` object, a `.a` archive, or a `-lNAME`
+library. A `.c` file is handed straight to the final `cc` step, so it is
+compiled and linked in one shot. `ffi_func` emits a plain `extern`
+declaration for each symbol; the linker resolves it against whatever you pass
+via `--link`. There is no name mangling -- the C function name is used verbatim.
+
+### The four steps
+
+1. **Write the C.** Plain C functions with FFI-friendly signatures. Give them a
+   short project prefix (this repo uses `sx_`) so it is obvious they are
+   project-local, not runtime, symbols.
+
+   ```c
+   /* my_math.c */
+   int my_add(int a, int b) { return a + b; }
+   ```
+
+2. **Declare the binding** in a Ruby module:
+
+   ```ruby
+   module MyNative
+     ffi_func :my_add, [:int, :int], :int
+   end
+   ```
+
+3. **Build with `--link`:**
+
+   ```sh
+   spinel --link native/my_math.c source/app.rb -o bin/app
+   # probe form (compile + run in a temp dir): add -E, keep --link
+   spinel --link native/my_math.c -E source/app.rb
+   ```
+
+4. **Call it** as `Module.symbol(args)`: `MyNative.my_add(2, 3)  # => 5`.
+
+### C ABI cheat-sheet for `ffi_func` type specs
+
+| Spec | C type | Notes |
+|---|---|---|
+| `:int` | `int` | also `:uint32` -> `uint32_t`, `:size_t` -> `size_t` |
+| `:bool` | `int` | 0 / non-zero |
+| `:float` / `:double` | `float` / `double` | |
+| `:str` | `const char *` | NUL-terminated; stops at first `\0` |
+| `:binstr` | `const char *` | binary-safe **return only**; see below |
+| `:ptr` | `void *` | opaque pointer |
+| `:void` | `void` | return type only |
+
+**Returning strings.** A returned `const char *` is *borrowed* -- the buffer
+stays owned by C, so return a `static` buffer (as `socket_ext.c` does) or a
+string literal, not stack memory. For text, `:str` is fine. For bytes that may
+contain embedded NULs, declare the return as `:binstr` and have the C function
+set the runtime global `sp_net_bin_len` to the byte count before returning:
+
+```c
+extern int sp_net_bin_len;          /* runtime-provided length channel */
+static char buf[65536];
+const char *my_bytes(...) {
+  /* ... fill buf, n = length ... */
+  sp_net_bin_len = n;               /* MUST set before returning :binstr */
+  return buf;
+}
+```
+
+Same static-buffer caveat as the runtime helpers: the next FFI call may reuse
+the buffer, so copy the result (`"" + value`) if you need to keep it, and it is
+not thread-safe -- guard with a `Mutex` under real parallelism.
+
+### Manual `cc` path (when you need full control)
+
+If you need custom `CFLAGS`/`LDFLAGS`, static linking, or a specific `-I`/`-L`,
+stop at C with `-c` and drive the linker yourself:
+
+```sh
+spinel source/app.rb -c -o app.c        # emit generated C only
+cc -I<spinel>/lib -o bin/app app.c native/my_math.c \
+   <spinel>/lib/libspinel_rt.a -lm
+```
+
+For linking against an installed system library instead of your own `.c`, prefer
+the in-source `ffi_lib`/`ffi_cflags` directives (see `<spinel>/docs/FFI.md`);
+they emit `SPINEL_LINK`/`SPINEL_CFLAGS` marker comments the compiler scrapes
+automatically.
+
 ## Require-Based Features
 
 These features should be reached with `require`, not hand-written FFI.
@@ -437,6 +536,34 @@ Ruby surface:
 `ConditionVariable`, and `sleep`.
 
 These are core. `require "thread"` and `require "fiber"` are tolerated no-ops.
+
+#### Concurrency caveat: `File.read` and `Digest` are NOT thread-safe
+
+Spinel runs green threads over N OS workers with **no GVL** (real parallelism),
+so any runtime helper backed by shared/static state is a critical section.
+Verified while building `source/parallel_digest.rb` (~30 runs plus minimal
+probes):
+
+- `File.read` and `Digest::SHA256.hexdigest` each return a shared, process-wide
+  **static C buffer**. With two or more green threads live, one thread's call
+  overwrites the buffer before another has copied its result out.
+- Symptoms: blank digests, or a digest paired with the wrong file. Reproducible
+  and independent of `SPINEL_WORKERS` -- it fails even with `SPINEL_WORKERS=1`
+  (one OS worker running several green threads cooperatively).
+- There is no thread-safe streaming API: `Digest::SHA256.new.update(...)` raises
+  `undefined method 'update'`.
+- Storing a nested `[path, digest]` array into a shared results array from
+  multiple threads also corrupted; storing one flat `"path\tdigest"` string per
+  entry is stable.
+
+Resolution (matches `shasum -a 256`, identical under CRuby): run the whole
+read + hash + append inside `mutex.synchronize`, so exactly one thread touches
+the static buffers at a time. `Mutex#synchronize` is compiler-inlined with full
+ensure semantics, so it is the idiomatic guard. This makes hashing effectively
+serial on Spinel today; treat it as the teaching point rather than a bug to
+route around. Also note `Thread#raise`/`Thread#kill` targeting the main thread
+are no-ops. See `tmp/example_apps_plan/notes_deviations.md` and
+`tmp/example_apps_plan/research_thread_queue_mutex.md` for the full analysis.
 
 ### System, Inspect, GC, Allocation: `sp_system.*`, `sp_inspect.*`, `sp_gc.*`, `sp_alloc.*`
 

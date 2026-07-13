@@ -127,6 +127,25 @@ Use `SPINEL_REQUIRE_GATE=1` when testing examples:
 - `io/console` for `IO#winsize`
 - `time` for `Time#iso8601`
 
+### `optparse` captures boolean flags only, not option VALUES
+
+`require "optparse"` compiles and runs, but the bundled subset only fires the
+handler for boolean flags. For a *value-taking* option the handler block is
+never called with the value, so the captured variable keeps its default.
+Observed while building `source/todo_cli.rb` with a `-f FILE` option:
+
+- `-fVALUE`, `-f VALUE`, and `--file=VALUE` all left the target variable at its
+  default under Spinel, while CRuby captured the value in every form.
+- Worse, `-f VALUE` left the bare `VALUE` token behind in `ARGV` after
+  `parse!`, so it was then mis-read as the subcommand -- a silent, runtime-only
+  dual-runtime divergence (no compile error).
+
+Workaround (used in `todo_cli.rb`): parse value-taking flags with a small
+manual `ARGV` loop -- the same dependency-free style as the server examples --
+and let `optparse` handle only boolean flags, or drop it entirely. A manual
+loop behaves identically under Spinel and CRuby. See
+`tmp/example_apps_plan/notes_deviations.md` for the full probe log.
+
 ### Require Does Not Work for These Ruby Libraries Today
 
 This list is not exhaustive; it captures common examples that Ruby programmers
@@ -200,10 +219,11 @@ helper, then passed to another helper) raised `undefined method 'index'` /
 
 Confirmed on such a poly string:
 
-- Works: `#length`, single-index `#[]` (e.g. `s[i]`), `==`, `#start_with?`,
-  string concatenation (`user + ch`, `"" + s`).
+- Works: `#length`, single-index `#[]` (e.g. `token[char_index]`), `==`,
+  `#start_with?`, string concatenation (`user + char`, `"" + token`).
 - Fails at runtime: `#index`, `#split`, and range/`begin...end` slicing
-  (`s[0...n]`, `s[i..-1]` returned a single character instead of a substring).
+  (`token[0...n]`, `token[char_index..-1]` returned a single character instead
+  of a substring).
 
 The failure is context-dependent: the same helper compiles and runs correctly
 in a small standalone probe but fails inside the full program, because
@@ -213,9 +233,10 @@ materializes a runtime `String` but does **not** restore the missing methods.
 Workaround used in `token_api.rb`: parse the poly string with a manual
 character loop that relies only on `#length`, single-index `#[]`, `==`, and
 concatenation -- e.g. to split `"user.signature"` on the first `.`, walk the
-characters and build `user` / `sig` by appending one char at a time. Prefer
-this pattern over `#split` / `#index` / range slices whenever a string is
-derived from parsed network or `recv` input and then handed across methods.
+characters with `char_index` and build `user` / `sig` by appending one `char`
+at a time. Prefer this pattern over `#split` / `#index` / range slices whenever
+a string is derived from parsed network or `recv` input and then handed across
+methods.
 
 ## Array and Enumerable Gaps
 
@@ -413,7 +434,9 @@ when configured, but Ruby's exact numeric tower is richer.
 
 Prefer these because they are supported and already fit Spinel's design:
 
-- CLI parsing: `require "optparse"` for simple flags, or manual `ARGV` parsing
+- CLI parsing: `require "optparse"` for boolean-only flags, or manual `ARGV`
+  parsing for any flag that takes a value (the optparse subset does not capture
+  option values -- see the optparse note above)
 - JSON: `require "json"`
 - Base64: `require "base64"`
 - Digests: `require "digest"` for SHA1/SHA256 hexdigest

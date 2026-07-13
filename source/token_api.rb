@@ -82,21 +82,21 @@ def verify_token(token)
   # the user, everything after is the signature. Building the two parts by
   # char-concatenation keeps us on the operations that dispatch reliably.
   token = "" + token
-  n = token.length
+  length = token.length
   user = ""
   sig = ""
   seen_dot = false
-  ci = 0
-  while ci < n
-    ch = token[ci]
-    if !seen_dot && ch == "."
+  char_index = 0
+  while char_index < length
+    char = token[char_index]
+    if !seen_dot && char == "."
       seen_dot = true
     elsif seen_dot
-      sig = sig + ch
+      sig = sig + char
     else
-      user = user + ch
+      user = user + char
     end
-    ci += 1
+    char_index += 1
   end
   return nil unless seen_dot
   return nil if user == "" || sig == ""
@@ -213,10 +213,10 @@ def handle_client(client)
     # an explicit loop so it is unambiguously a String array (a `|| []`
     # fallback would introduce an empty Integer array and a type mismatch).
     headers = []
-    hi = 1
-    while hi < lines.length
-      headers.push(lines[hi])
-      hi += 1
+    header_index = 1
+    while header_index < lines.length
+      headers.push(lines[header_index])
+      header_index += 1
     end
 
     parts = request_line.split(" ")
@@ -234,16 +234,16 @@ end
 # dependency-free style. port stays an Integer throughout (we assign the
 # parsed value via .to_i) so codegen keeps a stable numeric type.
 port = 8080
-i = 0
-while i < ARGV.length
-  if ARGV[i] == "-p"
-    pv = ARGV[i + 1]
-    if pv
-      port = "#{pv}".to_i
-      i += 1
+arg_index = 0
+while arg_index < ARGV.length
+  if ARGV[arg_index] == "-p"
+    port_value = ARGV[arg_index + 1]
+    if port_value
+      port = "#{port_value}".to_i
+      arg_index += 1
     end
   end
-  i += 1
+  arg_index += 1
 end
 port_str = "#{port}"
 

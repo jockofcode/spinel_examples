@@ -23,11 +23,23 @@
   ul { margin:0.3em 0 0.3em 1.2em; }
   li { margin:0.28em 0; line-height:1.3; }
   code { font-family:SFMono-Regular,Consolas,Menlo,monospace; }
-  pre { background:var(--code); border-left:4px solid var(--accent);
+  pre { position:relative; background:var(--code);
+        border-left:4px solid var(--accent);
         border-radius:6px; padding:0.7em 1em; margin:0.5em 0; font-size:0.74em;
         line-height:1.4; overflow:auto; max-height:56vh; }
   pre code { color:var(--fg); }
   pre .c { color:var(--dim); }
+  /* Copy-to-clipboard button, one per code block. */
+  .copy-btn { position:absolute; top:6px; right:6px; z-index:2;
+              display:inline-flex; align-items:center; gap:0.35em;
+              background:#1b2333; color:var(--dim); border:1px solid #33405a;
+              border-radius:6px; padding:2px 8px; font-size:0.8em; cursor:pointer;
+              font-family:inherit; opacity:0; transition:opacity .15s, color .15s; }
+  pre:hover .copy-btn, .copy-btn:focus { opacity:1; }
+  .copy-btn:hover { color:var(--fg); background:#26314a; }
+  .copy-btn.copied { color:var(--accent2); border-color:var(--accent2); opacity:1; }
+  .copy-btn svg { width:1em; height:1em; fill:none; stroke:currentColor;
+                  stroke-width:2; }
   .kbd { background:#222b3d; border:1px solid #33405a; border-radius:4px;
          padding:0 0.35em; font-size:0.8em; color:var(--accent2); }
   .tag { color:var(--accent2); font-size:0.7em; letter-spacing:0.08em;
@@ -42,6 +54,16 @@
   #nav button:hover { background:#26314a; }
   .two { display:flex; gap:1.2em; }
   .two > div { flex:1; }
+  /* Labeled subsection panels (e.g. "Buys you" / "Costs you"). */
+  .panel { background:var(--code); border-radius:8px; padding:0.6em 1em 0.7em;
+           border-top:3px solid var(--dim); }
+  .panel h4 { font-size:0.72em; letter-spacing:0.08em; text-transform:uppercase;
+              margin-bottom:0.35em; color:var(--dim); }
+  .panel p { font-size:0.95em; line-height:1.35; }
+  .panel.good { border-top-color:var(--accent2); }
+  .panel.good h4 { color:var(--accent2); }
+  .panel.cost { border-top-color:var(--accent); }
+  .panel.cost h4 { color:var(--accent); }
 </style>
 </head>
 <body>
@@ -49,8 +71,8 @@
 <section class="slide">
   <h1>Compile Your Ruby</h1>
   <h2>5 Real Apps with Spinel</h2>
-  <p class="sub">Ahead-of-time Ruby &rarr; native binaries &middot; Ruby Meetup</p>
-  <p class="sub">&lt;date TBD&gt;</p>
+  <p class="sub">Ahead-of-time Ruby &rarr; native binaries &middot; URUG Meetup</p>
+  <p class="sub">July 15th 2026</p>
 </section>
 
 <section class="slide">
@@ -68,24 +90,28 @@ Added #1: give this talk</code></pre>
 <section class="slide">
   <h3>What is Spinel?</h3>
   <h2>A whole-program AOT Ruby-to-C compiler</h2>
-  <ul>
-    <li>Reads your Ruby, emits C, links a native executable.</li>
-    <li class="tag">Buys you</li>
-    <li>Instant startup, trivial deploys, one self-contained binary.</li>
-    <li class="tag">Costs you</li>
-    <li>No <code>eval</code>, no runtime metaprogramming, a curated stdlib.</li>
-  </ul>
+  <p class="sub">Reads your Ruby, emits C, links a native executable.</p>
+  <div class="two">
+    <div class="panel good">
+      <h4>Buys you</h4>
+      <p>Instant startup, trivial deploys, one self-contained binary.</p>
+    </div>
+    <div class="panel cost">
+      <h4>Costs you</h4>
+      <p>No <code>eval</code>, no runtime metaprogramming, a curated stdlib.</p>
+    </div>
+  </div>
 </section>
 
 <section class="slide">
   <h3>How we'll tour this</h3>
   <h2>5 apps, each built and verified</h2>
   <ul>
-    <li><b>FyelSrvr</b> &mdash; static file server (sockets)</li>
-    <li><b>todo_cli</b> &mdash; CLI task manager (optparse + JSON)</li>
-    <li><b>log_report</b> &mdash; access-log analyzer (regexp/scanner/set)</li>
-    <li><b>token_api</b> &mdash; JSON API with signed tokens (FFI)</li>
-    <li><b>parallel_digest</b> &mdash; threaded file hasher (Thread/Queue/Mutex)</li>
+    <li><b>FyelSrvr</b>, static file server (sockets)</li>
+    <li><b>todo_cli</b>, CLI task manager (CLI flags + JSON)</li>
+    <li><b>log_report</b>, access-log analyzer (regexp/scanner/set)</li>
+    <li><b>token_api</b>, JSON API with signed tokens (FFI)</li>
+    <li><b>parallel_digest</b>, threaded file hasher (Thread/Queue/Mutex)</li>
   </ul>
   <p class="sub">Every one compiles, runs, and also runs under plain <code>ruby</code>.</p>
 </section>
@@ -98,7 +124,7 @@ Added #1: give this talk</code></pre>
   <pre><code>$ spinel source/simple_server_6.rb -o bin/fyel_srvr
 $ ./bin/fyel_srvr -p 8080
 # directory listings, content types, index.html, 404s</code></pre>
-  <p class="sub">Sockets, HTTP, path safety &mdash; in one compiled file.</p>
+  <p class="sub">Sockets, HTTP, path safety, in one compiled file.</p>
 </section>
 
 <section class="slide">
@@ -117,6 +143,123 @@ else
   end
 end</code></pre>
   <ul><li>Same <code>TCPServer.open</code> / <code>recv</code> / <code>write</code> API on both.</li></ul>
+</section>
+
+<section class="slide">
+  <h3>Deep dive &middot; how did we KNOW sockets needed FFI?</h3>
+  <h2>The gap-diagnosis decision tree</h2>
+  <pre><code>1. Try plain Ruby.        require "socket"
+   $ spinel -E -e 'require "socket"; puts 1'
+   spinel: cannot load such file -- socket      <span class="c"># gone</span>
+
+2. Try the require gate.  SPINEL_REQUIRE_GATE=1
+   $ SPINEL_REQUIRE_GATE=1 spinel -E -e 'require "socket"'
+   cannot load such file -- socket   <span class="c"># not a gated pkg either</span></code></pre>
+  <ul>
+    <li>No Ruby surface, no package, but a TCP server is core OS work,
+        so the <b>capability almost certainly exists</b> in the runtime.</li>
+    <li>The question flips: not &ldquo;is it in Ruby?&rdquo; but
+        &ldquo;is there a native <code>sp_*</code> symbol I can bind?&rdquo;</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h3>Deep dive &middot; find the native symbol, then bind it</h3>
+  <h2>grep the runtime's lib/, read the C signature</h2>
+  <pre><code>3. Grep the Spinel runtime for the capability.
+   $ grep -rn "sp_net" spinel/lib/*.h
+   lib/sp_net.h: int sp_net_listen(int port, int reuseport);
+   lib/sp_net.h: int sp_net_accept(int fd);
+   lib/sp_net.h: char *sp_net_recv_some(int fd, int max);
+
+4. Translate the C signature into an ffi_func line:
+   int  sp_net_listen(int, int)  &rarr;  [:int, :int], :int
+   char*sp_net_recv_some(int,int)&rarr;  [:int, :int], :binstr</code></pre>
+  <ul>
+    <li>Types: <code>:int</code>, <code>:str</code> (NUL-terminated), <code>:binstr</code>
+        (length from <code>sp_net_bin_len</code>), <code>:void</code>.</li>
+    <li>Rule of thumb: <b>a header in <code>lib/sp_*.h</code> = a bindable
+        symbol.</b> Most of <code>lib/</code> backs Ruby methods, only
+        reach for the ones with no Ruby surface (net, crypto).</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h3>Deep dive &middot; the module = the binding table</h3>
+  <h2>module + ffi_func, then a Ruby wrapper</h2>
+  <pre><code>module SpinelSocketNative        <span class="c"># the binding table</span>
+  ffi_func :sp_net_listen,   [:int, :int], :int
+  ffi_func :sp_net_recv_some,[:int, :int], :binstr
+end
+
+<span class="c"># call it: Module.symbol(args)</span>
+fd = SpinelSocketNative.sp_net_listen(port, 1)</code></pre>
+  <ul>
+    <li><code>ffi_func :name, [arg_types], :ret</code>, module-level, one
+        line per symbol. No headers, no <code>attach_function</code> boilerplate.</li>
+    <li>Then wrap the raw fds in familiar Ruby classes
+        (<code>TCPServer</code>/<code>TCPSocket</code>) so callers never see the FFI.</li>
+    <li>Same recipe reused for crypto next, <code>sp_crypto_*</code> in
+        <code>lib/sp_crypto.h</code>.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h3>Deep dive &middot; bring your OWN C</h3>
+  <h2>Write C, bind it, link it with <code>--link</code></h2>
+  <div class="two">
+    <div>
+      <pre><code><span class="c">// native/my_math.c</span>
+int my_add(int a, int b) {
+  return a + b;
+}</code></pre>
+      <pre><code><span class="c"># app.rb</span>
+module MyNative
+  ffi_func :my_add, [:int, :int], :int
+end
+puts MyNative.my_add(2, 3)   <span class="c"># =&gt; 5</span></code></pre>
+    </div>
+    <div>
+      <pre><code><span class="c"># compile + link your .c straight in:</span>
+$ spinel --link native/my_math.c \
+    source/app.rb -o bin/app
+$ ./bin/app
+5
+
+<span class="c"># probe form: -E runs it, keep --link</span>
+$ spinel --link native/my_math.c -E app.rb</code></pre>
+      <ul>
+        <li><code>--link ARG</code> is repeatable: a <code>.c</code>,
+            <code>.o</code>, <code>.a</code>, or <code>-lNAME</code>.</li>
+        <li><code>ffi_func</code> emits a plain <code>extern</code>; the linker
+            finds your symbol. No name mangling.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <h3>Deep dive &middot; the custom-C ABI</h3>
+  <h2>Signatures, and returning strings safely</h2>
+  <pre><code><span class="c">// :str is a borrowed const char* (NUL-terminated).</span>
+<span class="c">// For bytes, return :binstr and set the length global:</span>
+extern int sp_net_bin_len;          <span class="c">// runtime-provided</span>
+static char buf[65536];             <span class="c">// static, not stack</span>
+const char *my_bytes(const char *in) {
+  int n = fill(buf, in);            <span class="c">// ...produce n bytes</span>
+  sp_net_bin_len = n;               <span class="c">// MUST set for :binstr</span>
+  return buf;
+}</code></pre>
+  <ul>
+    <li>Types map 1:1: <code>:int</code>&rarr;<code>int</code>,
+        <code>:str</code>/<code>:binstr</code>&rarr;<code>const char*</code>,
+        <code>:ptr</code>&rarr;<code>void*</code>, <code>:void</code>&rarr;<code>void</code>.</li>
+    <li>Returned buffers are <b>borrowed &amp; static</b>, same rule as the
+        runtime: copy with <code>"" + s</code> to keep it, <code>Mutex</code> it
+        under threads.</li>
+    <li>Need custom <code>CFLAGS</code>/static linking? <code>spinel app.rb -c</code>
+        to emit C, then drive <code>cc</code> yourself.</li>
+  </ul>
 </section>
 
 <section class="slide">
@@ -157,7 +300,7 @@ File.write(path, JSON.pretty_generate(tasks))
 tasks = JSON.parse(File.read(path))   <span class="c"># string keys on load</span></code></pre>
   <ul>
     <li><code>JSON.pretty_generate</code>, <code>JSON.parse</code>, <code>File.write</code>/<code>read</code>.</li>
-    <li>Flags parsed with a tiny ARGV loop &mdash; Spinel's <code>optparse</code>
+    <li>Flags parsed with a tiny ARGV loop, Spinel's <code>optparse</code>
         subset captures boolean flags only, not option <i>values</i>.</li>
   </ul>
 </section>
@@ -178,7 +321,7 @@ tasks = JSON.parse(File.read(path))   <span class="c"># string keys on load</spa
 <section class="slide">
   <span class="tag">App 3 / 5</span>
   <h1>log_report</h1>
-  <h2>Where Ruby shines: text processing &mdash; that compiles</h2>
+  <h2>Where Ruby shines: text processing, that compiles</h2>
   <pre><code>Total requests : 28
 Malformed lines: 2
 Unique IPs     : 5
@@ -226,14 +369,16 @@ GET  /notes  (no/bad token)    &rarr; 401 unauthorized</code></pre>
 </section>
 
 <section class="slide">
-  <h3>Technique &middot; FFI in three lines</h3>
+  <h3>Technique &middot; the same FFI recipe, second time</h3>
   <h2>Call the C runtime directly</h2>
-  <pre><code>module SpinelToken
+  <pre><code><span class="c"># require "openssl"? gone. grep lib/sp_crypto.h &rarr; found:</span>
+module SpinelToken
   ffi_func :sp_crypto_hmac_sha256_b64url, [:str, :str], :str
   ffi_func :sp_crypto_random_b64url, [:int], :str
 end</code></pre>
   <ul>
-    <li>Declare name, arg types, return type &mdash; done.</li>
+    <li>Exact steps as sockets: probe &rarr; gate &rarr; grep <code>lib/</code>
+        &rarr; declare. Crypto lives in <code>lib/sp_crypto.h</code>.</li>
     <li>Under CRuby the same file falls back to <code>OpenSSL::HMAC</code>.</li>
     <li>Byte-identical tokens across both runtimes.</li>
   </ul>
@@ -249,7 +394,7 @@ def self.hmac_b64url(key, msg)
 end</code></pre>
   <ul>
     <li><code>"" + value</code> materializes a fresh, safe Ruby String.</li>
-    <li>Same rule bit us again in <b>parallel_digest</b> &mdash; next up.</li>
+    <li>Same rule bit us again in <b>parallel_digest</b>, next up.</li>
   </ul>
 </section>
 
@@ -287,7 +432,7 @@ threads.each { |t| t.join }</code></pre>
   results &lt;&lt; "#{path}\t#{digest}"   <span class="c"># shared state</span>
 end</code></pre>
   <ul>
-    <li>Spinel schedules <code>Thread</code>s <b>M:N</b> onto OS workers &mdash; the
+    <li>Spinel schedules <code>Thread</code>s <b>M:N</b> onto OS workers, the
         JRuby/TruffleRuby model, not CRuby's GVL.</li>
     <li>So unguarded <code>Array#&lt;&lt;</code> from two threads is a <b>real data race</b>.</li>
     <li><code>synchronize</code> is compiler-inlined with full <code>ensure</code> semantics.</li>
@@ -301,7 +446,7 @@ end</code></pre>
 $ ./parallel_digest source -w 8       <span class="c"># uses all cores</span></code></pre>
   <ul>
     <li>Pure CPU work parallelizes: <b>~3.5&times;</b> on a 4-thread probe.</li>
-    <li>But <code>File.read</code> / <code>Digest</code> use shared static buffers &mdash;
+    <li>But <code>File.read</code> / <code>Digest</code> use shared static buffers,
         <b>not thread-safe</b>, so we serialize the read+hash in the Mutex.</li>
     <li>The lesson: no GVL means shared/static libs need a critical section.</li>
   </ul>
@@ -324,7 +469,9 @@ $ ./parallel_digest source -w 8       <span class="c"># uses all cores</span></c
   <h3>Patterns that carried across all 5 apps</h3>
   <h2>How to work with Spinel</h2>
   <ul>
-    <li><b>Probe first:</b> <span class="kbd">spinel -E -e '...'</span> before writing the app.</li>
+    <li><b>Probe first:</b> <span class="kbd">spinel -E -e '...'</span> before writing the app,
+        <code>-e</code> is inline Ruby source, <code>-E</code> compiles &amp;
+        runs it on the spot (no file, no leftover binary).</li>
     <li><b>Require gate:</b> <code>SPINEL_REQUIRE_GATE=1</code> for stdlib packages.</li>
     <li><b>FFI last:</b> use Ruby &rarr; use <code>require</code> &rarr; use <code>require_relative</code>
         &rarr; only then <code>ffi_func</code> for native symbols.</li>
@@ -337,9 +484,56 @@ $ ./parallel_digest source -w 8       <span class="c"># uses all cores</span></c
   <h2>Five apps, one script</h2>
   <pre><code>$ git clone github.com/jockofcode/spinel_examples
 $ asdf plugin add spinel &amp;&amp; asdf install spinel latest
-$ sh scripts/build_all.sh
+$ sh scripts/build_all.sh          <span class="c"># build + smoke test</span>
+$ sh tests/run_app_tests.sh        <span class="c"># full dual-runtime suite</span>
 ...
 ALL GREEN</code></pre>
+  <ul>
+    <li><b>The asdf plugin is mine</b>, I wrote it:
+        <code>github.com/jockofcode/asdf-spinel</code>.</li>
+    <li>Every app is tested against <b>both</b> the native binary and plain
+        <code>ruby</code>, same asserts, proving parity.</li>
+    <li><code>sh scripts/build_all.sh --full</code> runs the build + the whole
+        suite in one shot.</li>
+    <li class="sub">Hover any code block for a <b>copy</b> button, it strips
+        the <code>$</code> prompt and comments so it pastes ready to run.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h3>Run them yourself</h3>
+  <h2>Build one, run one, copy &amp; paste</h2>
+  <div class="two">
+    <div>
+      <pre><code><span class="c"># FyelSrvr, static file server</span>
+$ spinel source/simple_server_6.rb -o bin/fyel_srvr
+$ ./bin/fyel_srvr -p 8080        <span class="c"># open :8080</span>
+
+<span class="c"># todo_cli, note the require gate</span>
+$ SPINEL_REQUIRE_GATE=1 spinel source/todo_cli.rb -o bin/todo_cli
+$ ./bin/todo_cli add "write slides"   <span class="c"># Added #1</span>
+$ ./bin/todo_cli list
+
+<span class="c"># log_report, analyze the sample log</span>
+$ SPINEL_REQUIRE_GATE=1 spinel source/log_report.rb -o bin/log_report
+$ ./bin/log_report data/sample_access.log</code></pre>
+    </div>
+    <div>
+      <pre><code><span class="c"># parallel_digest, hash a dir with 4 workers</span>
+$ SPINEL_REQUIRE_GATE=1 spinel source/parallel_digest.rb -o bin/parallel_digest
+$ ./bin/parallel_digest source -w 4
+$ SPINEL_WORKERS=1 ./bin/parallel_digest source -w 4
+
+<span class="c"># token_api, start the server</span>
+$ SPINEL_REQUIRE_GATE=1 spinel source/token_api.rb -o bin/token_api
+$ ./bin/token_api -p 8124
+
+<span class="c"># ...then in a second terminal:</span>
+$ TOKEN=$(curl -s -X POST localhost:8124/login -d '{"user":"matz"}' \
+    | sed 's/.*"token":"//; s/".*//')
+$ curl -s -H "Authorization: Bearer $TOKEN" localhost:8124/notes</code></pre>
+    </div>
+  </div>
 </section>
 
 <section class="slide">
@@ -394,6 +588,69 @@ ALL GREEN</code></pre>
     return isNaN(n) ? 1 : n;
   }
   window.addEventListener("hashchange", function () { show(fromHash() - 1); });
+
+  // ---- Copy-to-clipboard on every code block ---------------------------------
+  // We copy the RUNNABLE text: if a block has "$ " shell prompts we keep only
+  // the command lines (prompt + trailing "# ..." comments stripped) so what
+  // lands on the clipboard pastes straight into a terminal. Plain Ruby blocks
+  // (no prompt) are copied verbatim, comments and all.
+  function runnableText(codeEl) {
+    var lines = codeEl.textContent.replace(/\n$/, "").split("\n");
+    var hasPrompt = lines.some(function (l) { return /^\s*\$ /.test(l); });
+    if (!hasPrompt) { return lines.join("\n"); }
+    var cmds = [];
+    var cont = false;                           // inside a "\"-continued command
+    lines.forEach(function (l) {
+      var m = l.match(/^\s*\$ (.*)$/);
+      if (m) {
+        var cmd = m[1];
+        cont = /\\\s*$/.test(cmd);
+        cmds.push(cont ? cmd : cmd.replace(/\s+#.*$/, "").replace(/\s+$/, ""));
+      } else if (cont) {                        // continuation line, keep as-is
+        cont = /\\\s*$/.test(l);
+        cmds.push(cont ? l : l.replace(/\s+#.*$/, "").replace(/\s+$/, ""));
+      }                                         // else: output/"..." line, skip
+    });
+    return cmds.join("\n");
+  }
+
+  var COPY_SVG = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" ' +
+    'height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    // Fallback for non-secure contexts (e.g. file://).
+    return new Promise(function (resolve, reject) {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta); resolve();
+      } catch (err) { reject(err); }
+    });
+  }
+
+  document.querySelectorAll("pre").forEach(function (pre) {
+    var code = pre.querySelector("code");
+    if (!code) { return; }
+    var btn = document.createElement("button");
+    btn.className = "copy-btn";
+    btn.type = "button";
+    btn.setAttribute("aria-label", "Copy to clipboard");
+    btn.innerHTML = COPY_SVG + "<span>copy</span>";
+    var label = btn.querySelector("span");
+    btn.addEventListener("click", function () {
+      copyText(runnableText(code)).then(function () {
+        btn.classList.add("copied"); label.textContent = "copied!";
+        setTimeout(function () {
+          btn.classList.remove("copied"); label.textContent = "copy";
+        }, 1400);
+      }).catch(function () { label.textContent = "press \u2318C"; });
+    });
+    pre.appendChild(btn);
+  });
 
   show(fromHash() - 1);
 </script>

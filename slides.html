@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compile Your Ruby: 5 Real Apps with Spinel</title>
+<style>
+  :root { --bg:#0f1420; --fg:#e6edf3; --dim:#8b98a9; --accent:#ff5a3c;
+          --accent2:#4ec9b0; --code:#161c2b; --kw:#c586c0; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { height:100%; }
+  body { background:var(--bg); color:var(--fg); font-size:28px;
+         font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+         overflow:hidden; }
+  .slide { position:absolute; inset:0; display:none; flex-direction:column;
+           justify-content:center; padding:6vh 8vw; }
+  .slide.active { display:flex; }
+  h1 { font-size:2.0em; line-height:1.1; margin-bottom:0.3em; }
+  h2 { font-size:1.5em; color:var(--accent2); margin-bottom:0.5em; }
+  h3 { font-size:1.0em; color:var(--accent); margin:0.4em 0 0.2em;
+       text-transform:uppercase; letter-spacing:0.05em; }
+  p.sub { color:var(--dim); font-size:1.1em; }
+  ul { margin:0.3em 0 0.3em 1.2em; }
+  li { margin:0.28em 0; line-height:1.3; }
+  code { font-family:SFMono-Regular,Consolas,Menlo,monospace; }
+  pre { background:var(--code); border-left:4px solid var(--accent);
+        border-radius:6px; padding:0.7em 1em; margin:0.5em 0; font-size:0.74em;
+        line-height:1.4; overflow:auto; max-height:56vh; }
+  pre code { color:var(--fg); }
+  pre .c { color:var(--dim); }
+  .kbd { background:#222b3d; border:1px solid #33405a; border-radius:4px;
+         padding:0 0.35em; font-size:0.8em; color:var(--accent2); }
+  .tag { color:var(--accent2); font-size:0.7em; letter-spacing:0.08em;
+         text-transform:uppercase; }
+  .big { font-size:1.4em; }
+  #hud { position:fixed; bottom:14px; right:20px; color:var(--dim);
+         font-size:16px; z-index:10; }
+  #nav { position:fixed; bottom:10px; left:20px; z-index:10; }
+  #nav button { background:#1b2333; color:var(--fg); border:1px solid #33405a;
+                border-radius:6px; font-size:22px; padding:2px 14px;
+                cursor:pointer; }
+  #nav button:hover { background:#26314a; }
+  .two { display:flex; gap:1.2em; }
+  .two > div { flex:1; }
+</style>
+</head>
+<body>
+
+<section class="slide">
+  <h1>Compile Your Ruby</h1>
+  <h2>5 Real Apps with Spinel</h2>
+  <p class="sub">Ahead-of-time Ruby &rarr; native binaries &middot; Ruby Meetup</p>
+  <p class="sub">&lt;date TBD&gt;</p>
+</section>
+
+<section class="slide">
+  <h3>The hook</h3>
+  <h2>One command. One binary. No VM.</h2>
+  <pre><code>$ spinel source/todo_cli.rb -o todo_cli
+$ ./todo_cli add "give this talk"
+Added #1: give this talk</code></pre>
+  <ul>
+    <li>No Ruby installed on the target. No <code>bundle</code>. Just a file.</li>
+    <li>Starts in milliseconds; ships as a single artifact.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h3>What is Spinel?</h3>
+  <h2>A whole-program AOT Ruby-to-C compiler</h2>
+  <ul>
+    <li>Reads your Ruby, emits C, links a native executable.</li>
+    <li class="tag">Buys you</li>
+    <li>Instant startup, trivial deploys, one self-contained binary.</li>
+    <li class="tag">Costs you</li>
+    <li>No <code>eval</code>, no runtime metaprogramming, a curated stdlib.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h3>How we'll tour this</h3>
+  <h2>5 apps, each built and verified</h2>
+  <ul>
+    <li><b>FyelSrvr</b> &mdash; static file server (sockets)</li>
+    <li><b>todo_cli</b> &mdash; CLI task manager (optparse + JSON)</li>
+    <li><b>log_report</b> &mdash; access-log analyzer (regexp/scanner/set)</li>
+    <li><b>token_api</b> &mdash; JSON API with signed tokens (FFI)</li>
+    <li><b>parallel_digest</b> &mdash; threaded file hasher (Thread/Queue/Mutex)</li>
+  </ul>
+  <p class="sub">Every one compiles, runs, and also runs under plain <code>ruby</code>.</p>
+</section>
+
+<!-- ===== App 1: FyelSrvr ===== -->
+<section class="slide">
+  <span class="tag">App 1 / 5</span>
+  <h1>FyelSrvr</h1>
+  <h2>A static file server, no framework</h2>
+  <pre><code>$ spinel source/simple_server_6.rb -o bin/fyel_srvr
+$ ./bin/fyel_srvr -p 8080
+# directory listings, content types, index.html, 404s</code></pre>
+  <p class="sub">Sockets, HTTP, path safety &mdash; in one compiled file.</p>
+</section>
+
+<section class="slide">
+  <h3>Technique &middot; one Ruby surface, two runtimes</h3>
+  <h2>socket_shim.rb</h2>
+  <pre><code><span class="c"># socket_shim.rb</span>
+if defined?(RUBY_ENGINE)
+  require "socket"          <span class="c"># CRuby: the real TCPServer</span>
+end
+if defined?(TCPServer)
+  <span class="c"># already have it</span>
+else
+  module SpinelSocketNative <span class="c"># Spinel: FFI over sp_net</span>
+    ffi_func :sp_net_listen, [:int, :int], :int
+    ffi_func :sp_net_accept, [:int], :int
+  end
+end</code></pre>
+  <ul><li>Same <code>TCPServer.open</code> / <code>recv</code> / <code>write</code> API on both.</li></ul>
+</section>
+
+<section class="slide">
+  <h3>Technique &middot; path-traversal defense</h3>
+  <h2>sanitize_path</h2>
+  <pre><code>segments = clean.split("/")
+safe_segments = []
+segments.each do |segment|
+  next if segment == "" || segment == "."
+  if segment == ".."
+    safe_segments.pop     <span class="c"># can never escape root</span>
+  else
+    safe_segments.push(segment)
+  end
+end
+"/" + safe_segments.join("/")</code></pre>
+  <pre><code>$ curl --path-as-is localhost:8080/../../etc/passwd
+HTTP/1.1 404 Not Found</code></pre>
+</section>
+
+<!-- ===== App 2: todo_cli ===== -->
+<section class="slide">
+  <span class="tag">App 2 / 5</span>
+  <h1>todo_cli</h1>
+  <h2>A CLI task manager with JSON persistence</h2>
+  <pre><code>$ ./todo_cli add "write slides"
+$ ./todo_cli done 1
+$ ./todo_cli list
+  1 [x] write slides</code></pre>
+</section>
+
+<section class="slide">
+  <h3>Technique &middot; JSON round-trip persistence</h3>
+  <h2>Durable state in one file</h2>
+  <pre><code>require "json"
+
+File.write(path, JSON.pretty_generate(tasks))
+tasks = JSON.parse(File.read(path))   <span class="c"># string keys on load</span></code></pre>
+  <ul>
+    <li><code>JSON.pretty_generate</code>, <code>JSON.parse</code>, <code>File.write</code>/<code>read</code>.</li>
+    <li>Flags parsed with a tiny ARGV loop &mdash; Spinel's <code>optparse</code>
+        subset captures boolean flags only, not option <i>values</i>.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h3>Technique &middot; stdlib via the require gate</h3>
+  <h2>SPINEL_REQUIRE_GATE=1</h2>
+  <pre><code>$ SPINEL_REQUIRE_GATE=1 spinel source/todo_cli.rb -o bin/todo_cli</code></pre>
+  <ul>
+    <li>Gated packages: <code>json</code>, <code>optparse</code>, <code>set</code>, <code>strscan</code>,
+        <code>stringio</code>, <code>base64</code>, <code>digest</code>.</li>
+    <li>Not available: <code>date</code>, <code>net/*</code>, <code>securerandom</code>; <code>erb</code> is a stub.</li>
+    <li>Probe first: a 1-line <span class="kbd">-e</span> check before you commit to an API.</li>
+  </ul>
+</section>
+
+<!-- ===== App 3: log_report ===== -->
+<section class="slide">
+  <span class="tag">App 3 / 5</span>
+  <h1>log_report</h1>
+  <h2>Where Ruby shines: text processing &mdash; that compiles</h2>
+  <pre><code>Total requests : 28
+Malformed lines: 2
+Unique IPs     : 5
+Top 5 paths by hits:
+   4  /
+   4  /api/status</code></pre>
+</section>
+
+<section class="slide">
+  <h3>Technique &middot; named-capture Regexp + MatchData</h3>
+  <h2>One regexp, one match</h2>
+  <pre><code>LINE_RE = %r{^(?&lt;ip&gt;\S+) \S+ \S+ \[(?&lt;time&gt;[^\]]+)\]
+  "(?&lt;method&gt;\S+) (?&lt;path&gt;\S+) [^"]*"
+  (?&lt;status&gt;\d+) (?&lt;size&gt;\d+|-)}
+
+m = LINE_RE.match(line)
+malformed += 1 and next if m.nil?
+status_counts[m[:status]] += 1   <span class="c"># MatchData#[:name]</span></code></pre>
+</section>
+
+<section class="slide">
+  <h3>Technique &middot; StringScanner + Set</h3>
+  <h2>Scan a field; count uniques</h2>
+  <pre><code>require "strscan"
+sc = StringScanner.new(time_str)
+sc.scan(/\d+/)               <span class="c"># day</span>
+return nil unless sc.getch == "/"
+mon = sc.scan(/[A-Za-z]+/)   <span class="c"># month name</span>
+
+require "set"
+unique_ips = Set.new
+unique_ips &lt;&lt; m[:ip]         <span class="c"># Set#&lt;&lt;, Set#size</span></code></pre>
+  <ul><li><code>StringScanner#scan/#getch</code>, <code>Set#&lt;&lt;</code>, <code>Set#size</code>.</li></ul>
+</section>
+
+<!-- ===== App 4: token_api ===== -->
+<section class="slide">
+  <span class="tag">App 4 / 5</span>
+  <h1>token_api</h1>
+  <h2>A JSON API with HMAC-signed bearer tokens</h2>
+  <pre><code>POST /login  {"user":"matz"}   &rarr; {"token":"matz.6Q_..."}
+GET  /notes  (Bearer token)    &rarr; 200 [ ...notes... ]
+GET  /notes  (no/bad token)    &rarr; 401 unauthorized</code></pre>
+  <p class="sub">Hand-rolled routing on the socket shim. No framework.</p>
+</section>
+
+<section class="slide">
+  <h3>Technique &middot; FFI in three lines</h3>
+  <h2>Call the C runtime directly</h2>
+  <pre><code>module SpinelToken
+  ffi_func :sp_crypto_hmac_sha256_b64url, [:str, :str], :str
+  ffi_func :sp_crypto_random_b64url, [:int], :str
+end</code></pre>
+  <ul>
+    <li>Declare name, arg types, return type &mdash; done.</li>
+    <li>Under CRuby the same file falls back to <code>OpenSSL::HMAC</code>.</li>
+    <li>Byte-identical tokens across both runtimes.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h3>War story &middot; the static-C-buffer gotcha</h3>
+  <h2>Copy before the next call</h2>
+  <pre><code><span class="c"># sp_crypto_* return a shared static buffer that the</span>
+<span class="c"># NEXT crypto call overwrites. Copy it out first:</span>
+def self.hmac_b64url(key, msg)
+  "" + SpinelToken.sp_crypto_hmac_sha256_b64url(key, msg)
+end</code></pre>
+  <ul>
+    <li><code>"" + value</code> materializes a fresh, safe Ruby String.</li>
+    <li>Same rule bit us again in <b>parallel_digest</b> &mdash; next up.</li>
+  </ul>
+</section>
+
+<!-- ===== App 5: parallel_digest ===== -->
+<section class="slide">
+  <span class="tag">App 5 / 5</span>
+  <h1>parallel_digest</h1>
+  <h2>A worker pool: Thread + Queue + Mutex</h2>
+  <pre><code>$ ./parallel_digest source -w 4
+45f1b6f59acf  source/todo_cli.rb
+ac581dce3fc1  source/token_api.rb
+hashed 11 files with 4 workers</code></pre>
+</section>
+
+<section class="slide">
+  <h3>Technique &middot; the shutdown handshake</h3>
+  <h2>Queue + poison pills</h2>
+  <pre><code>files.each { |f| queue &lt;&lt; f }
+workers.times { queue &lt;&lt; nil }   <span class="c"># one pill per worker</span>
+
+workers.times do
+  threads &lt;&lt; Thread.new { worker_loop(queue, results, mutex) }
+end
+threads.each { |t| t.join }</code></pre>
+  <ul>
+    <li>Worker: <code>item = queue.pop; break if item.nil?</code></li>
+    <li><code>Queue#close</code> &rarr; <code>pop</code> returns nil is the other idiom.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h3>Technique &middot; Ruby threads with NO GVL</h3>
+  <h2>Real parallelism &rarr; Mutex is mandatory</h2>
+  <pre><code>mutex.synchronize do
+  results &lt;&lt; "#{path}\t#{digest}"   <span class="c"># shared state</span>
+end</code></pre>
+  <ul>
+    <li>Spinel schedules <code>Thread</code>s <b>M:N</b> onto OS workers &mdash; the
+        JRuby/TruffleRuby model, not CRuby's GVL.</li>
+    <li>So unguarded <code>Array#&lt;&lt;</code> from two threads is a <b>real data race</b>.</li>
+    <li><code>synchronize</code> is compiler-inlined with full <code>ensure</code> semantics.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h3>Live knob &middot; and an honest caveat</h3>
+  <h2>SPINEL_WORKERS + a thread-safety limit</h2>
+  <pre><code>$ SPINEL_WORKERS=1 ./parallel_digest source -w 8
+$ ./parallel_digest source -w 8       <span class="c"># uses all cores</span></code></pre>
+  <ul>
+    <li>Pure CPU work parallelizes: <b>~3.5&times;</b> on a 4-thread probe.</li>
+    <li>But <code>File.read</code> / <code>Digest</code> use shared static buffers &mdash;
+        <b>not thread-safe</b>, so we serialize the read+hash in the Mutex.</li>
+    <li>The lesson: no GVL means shared/static libs need a critical section.</li>
+  </ul>
+</section>
+
+<!-- ===== Wrap-up ===== -->
+<section class="slide">
+  <h3>Honest limitations</h3>
+  <h2>What didn't fit</h2>
+  <ul>
+    <li>No <code>eval</code> / runtime metaprogramming; reflection mostly gone.</li>
+    <li>No <code>date</code>, no <code>net/*</code>; <code>erb</code> is a stub; no <code>Time.parse</code>.</li>
+    <li>Threading: data races are observable (no GVL);
+        <code>Thread#raise</code>/<code>#kill</code> on the main thread is a no-op.</li>
+    <li>Some stdlib helpers (File/Digest) aren't thread-safe yet.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h3>Patterns that carried across all 5 apps</h3>
+  <h2>How to work with Spinel</h2>
+  <ul>
+    <li><b>Probe first:</b> <span class="kbd">spinel -E -e '...'</span> before writing the app.</li>
+    <li><b>Require gate:</b> <code>SPINEL_REQUIRE_GATE=1</code> for stdlib packages.</li>
+    <li><b>FFI last:</b> use Ruby &rarr; use <code>require</code> &rarr; use <code>require_relative</code>
+        &rarr; only then <code>ffi_func</code> for native symbols.</li>
+    <li><b>Copy static buffers</b> and normalize strings with <code>"" + s</code>.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h3>Try it</h3>
+  <h2>Five apps, one script</h2>
+  <pre><code>$ git clone github.com/jockofcode/spinel_examples
+$ asdf plugin add spinel &amp;&amp; asdf install spinel latest
+$ sh scripts/build_all.sh
+...
+ALL GREEN</code></pre>
+</section>
+
+<section class="slide">
+  <h1>Thank you</h1>
+  <h2>Questions?</h2>
+  <p class="sub">Compile your Ruby. Ship one binary.</p>
+</section>
+
+<div id="hud"></div>
+<div id="nav">
+  <button id="prev" aria-label="previous">&lsaquo;</button>
+  <button id="next" aria-label="next">&rsaquo;</button>
+</div>
+
+<script>
+  var slides = document.querySelectorAll(".slide");
+  var total = slides.length;
+  var cur = 0;
+
+  function clamp(n) { return Math.max(0, Math.min(total - 1, n)); }
+
+  function show(n) {
+    cur = clamp(n);
+    for (var i = 0; i < total; i++) {
+      slides[i].classList.toggle("active", i === cur);
+    }
+    document.getElementById("hud").textContent = (cur + 1) + " / " + total;
+    if (("#" + (cur + 1)) !== location.hash) {
+      history.replaceState(null, "", "#" + (cur + 1));
+    }
+  }
+
+  function go(delta) { show(cur + delta); }
+
+  document.addEventListener("keydown", function (e) {
+    switch (e.key) {
+      case "ArrowRight": case " ": case "PageDown":
+        go(1); e.preventDefault(); break;
+      case "ArrowLeft": case "PageUp":
+        go(-1); e.preventDefault(); break;
+      case "Home": show(0); e.preventDefault(); break;
+      case "End": show(total - 1); e.preventDefault(); break;
+    }
+  });
+
+  document.getElementById("next").addEventListener("click", function () { go(1); });
+  document.getElementById("prev").addEventListener("click", function () { go(-1); });
+
+  // Deep-link support: open on the slide named in the URL hash (#12).
+  function fromHash() {
+    var n = parseInt((location.hash || "").replace("#", ""), 10);
+    return isNaN(n) ? 1 : n;
+  }
+  window.addEventListener("hashchange", function () { show(fromHash() - 1); });
+
+  show(fromHash() - 1);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Compiled example binaries (regenerate with scripts/build_all.sh).
+/bin/
+
+# Stray binaries built at the repo root (e.g. `spinel ... -o fyel_srvr`).
+/fyel_srvr
+/simple_server_1
+/simple_server_2
+/simple_server_3
+/simple_server_4
+/simple_server_5
+/simple_server_6
+/todo_cli
+/log_report
+/token_api
+/parallel_digest
+
+# Scratch data written by the CLI examples at run time. The tracked sample
+# input (data/sample_access.log) is NOT ignored -- only generated JSON state.
+/todo.json
+*.todo.json
+
+# C intermediates that a compiler run may leave behind.
+*.o
+*.dSYM/
+
+# OS / editor cruft.
+.DS_Store

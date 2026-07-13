@@ -26,6 +26,81 @@ else
     ffi_func :sp_net_poll_ready, [:int], :int
     ffi_func :sp_net_install_term_handlers, [], :int
     ffi_func :sp_net_shutdown_requested, [], :int
+
+    ffi_func :sx_set_nonblock, [:int], :int
+    ffi_func :sx_shutdown, [:int, :int], :int
+    ffi_func :sx_ipv6only, [:int], :int
+    ffi_func :sx_getsockname, [:int], :str
+    ffi_func :sx_getpeername, [:int], :str
+    ffi_func :sx_getsockopt_int, [:int, :int, :int], :int
+    ffi_func :sx_getsockopt_int_str, [:int, :str, :str], :int
+    ffi_func :sx_setsockopt_int, [:int, :int, :int, :int], :int
+    ffi_func :sx_setsockopt_int_str, [:int, :str, :str, :str], :int
+    ffi_func :sx_getpeereid_uid, [:int], :int
+    ffi_func :sx_getpeereid_gid, [:int], :int
+    ffi_func :sx_recv_flags, [:int, :int, :int], :binstr
+    ffi_func :sx_recv_nonblock, [:int, :int, :int], :binstr
+    ffi_func :sx_send_flags, [:int, :str, :int], :int
+    ffi_func :sx_send_nonblock, [:int, :str, :int], :int
+    ffi_func :sx_udp_socket, [:int], :int
+    ffi_func :sx_udp_bind, [:int, :str, :int], :int
+    ffi_func :sx_udp_connect, [:int, :str, :int], :int
+    ffi_func :sx_udp_sendto, [:int, :str, :int, :str, :int], :int
+    ffi_func :sx_udp_recvfrom, [:int, :int, :int], :binstr
+    ffi_func :sx_last_recvfrom_addr, [], :str
+    ffi_func :sx_socket_create, [:int, :int, :int], :int
+    ffi_func :sx_socket_create_tcp, [], :int
+    ffi_func :sx_socket_create_tcp6, [], :int
+    ffi_func :sx_last_errno, [], :int
+    ffi_func :sx_socket_bind, [:int, :str], :int
+    ffi_func :sx_socket_connect, [:int, :str], :int
+    ffi_func :sx_socket_listen, [:int, :int], :int
+    ffi_func :sx_socket_listen_str, [:int, :str], :int
+    ffi_func :sx_socket_accept, [:int], :int
+    ffi_func :sx_unix_socket, [], :int
+    ffi_func :sx_unix_connect, [:str], :int
+    ffi_func :sx_unix_server, [:str], :int
+    ffi_func :sx_unix_socketpair, [], :int
+    ffi_func :sx_unix_socketpair_first, [], :int
+    ffi_func :sx_unix_socketpair_second, [], :int
+    ffi_func :sx_send_fd, [:int, :int], :int
+    ffi_func :sx_recv_fd, [:int], :int
+    ffi_func :sx_sendmsg_fd, [:int, :str, :int], :int
+    ffi_func :sx_recvmsg_with_fd, [:int, :int, :int], :binstr
+    ffi_func :sx_last_recv_fd, [], :int
+    ffi_func :sx_gethostname, [], :str
+    ffi_func :sx_getaddrinfo_one, [:str, :int, :int, :int, :int, :int], :str
+    ffi_func :sx_getnameinfo, [:str, :int], :str
+    ffi_func :sx_getservbyname_port, [:str, :str], :int
+    ffi_func :sx_getservbyport_name, [:int, :str], :str
+    ffi_func :sx_getservbyport_name_str, [:str, :str], :str
+    ffi_func :sx_pack_sockaddr_in, [:int, :str], :str
+    ffi_func :sx_unpack_sockaddr_in_port, [:str], :int
+    ffi_func :sx_unpack_sockaddr_in_host, [:str], :str
+    ffi_func :sx_pack_sockaddr_un, [:str], :str
+    ffi_func :sx_unpack_sockaddr_un, [:str], :str
+    ffi_func :sx_const_af_inet, [], :int
+    ffi_func :sx_const_af_inet6, [], :int
+    ffi_func :sx_const_af_unix, [], :int
+    ffi_func :sx_const_af_unspec, [], :int
+    ffi_func :sx_const_sock_stream, [], :int
+    ffi_func :sx_const_sock_dgram, [], :int
+    ffi_func :sx_const_sol_socket, [], :int
+    ffi_func :sx_const_so_reuseaddr, [], :int
+    ffi_func :sx_const_so_reuseport, [], :int
+    ffi_func :sx_const_tcp_nodelay, [], :int
+    ffi_func :sx_const_shut_rd, [], :int
+    ffi_func :sx_const_shut_wr, [], :int
+    ffi_func :sx_const_shut_rdwr, [], :int
+    ffi_func :sx_ifaddr_count, [], :int
+    ffi_func :sx_ifaddr_name, [:int], :str
+    ffi_func :sx_ifaddr_ifindex, [:int], :int
+    ffi_func :sx_ifaddr_flags, [:int], :int
+    ffi_func :sx_ifaddr_family, [:int], :int
+    ffi_func :sx_ifaddr_addr, [:int], :str
+    ffi_func :sx_ifaddr_netmask, [:int], :str
+    ffi_func :sx_ifaddr_broadaddr, [:int], :str
+    ffi_func :sx_ifaddr_dstaddr, [:int], :str
   end
 
   module SpinelSocketShim
@@ -65,55 +140,69 @@ else
     end
 
     def recv(maxlen, flags = 0)
-      if flags != 0
-        SpinelSocketShim.unsupported("BasicSocket#recv flags")
+      if flags == 0
+        SpinelSocketNative.sp_net_recv_some(@fd, maxlen)
+      else
+        SpinelSocketNative.sx_recv_flags(@fd, maxlen, flags)
       end
-      SpinelSocketNative.sp_net_recv_some(@fd, maxlen)
     end
 
     def recv_nonblock(maxlen, flags = 0)
-      if flags != 0
-        SpinelSocketShim.unsupported("BasicSocket#recv_nonblock flags")
-      end
-      SpinelSocketNative.sp_net_set_nonblock(@fd)
-      SpinelSocketNative.sp_net_recv_some(@fd, maxlen)
+      SpinelSocketNative.sx_recv_nonblock(@fd, maxlen, flags)
     end
 
     def recvmsg(maxlen = 2048, flags = 0)
-      if flags != 0
-        SpinelSocketShim.unsupported("BasicSocket#recvmsg flags")
+      data = SpinelSocketNative.sx_recvmsg_with_fd(@fd, maxlen, flags)
+      received_fd = SpinelSocketNative.sx_last_recv_fd
+      if received_fd >= 0
+        io = UNIXSocket.__from_fd(received_fd)
+        ancillary = Socket::AncillaryData.unix_rights(io)
+        [data, nil, 0, ancillary]
+      else
+        [data, nil, 0]
       end
-      [recv(maxlen), nil, nil]
     end
 
     def recvmsg_nonblock(maxlen = 2048, flags = 0)
-      if flags != 0
-        SpinelSocketShim.unsupported("BasicSocket#recvmsg_nonblock flags")
-      end
-      [recv_nonblock(maxlen), nil, nil]
+      SpinelSocketNative.sx_set_nonblock(@fd)
+      recvmsg(maxlen, flags)
     end
 
-    def send(data, flags = 0, dest_sockaddr = nil)
-      if flags != 0 || dest_sockaddr
-        SpinelSocketShim.unsupported("BasicSocket#send flags or destination")
+    def send(data, flags = 0, dest_sockaddr = nil, port = nil)
+      if dest_sockaddr || port
+        SpinelSocketShim.unsupported("BasicSocket#send destination")
       end
-      SpinelSocketNative.sp_net_write_str(@fd, data)
+      if flags == 0
+        SpinelSocketNative.sp_net_write_str(@fd, data.to_s)
+      else
+        SpinelSocketNative.sx_send_flags(@fd, data.to_s, flags)
+      end
     end
 
     def sendmsg(data, flags = 0, dest_sockaddr = nil, controls = nil)
+      if dest_sockaddr
+        SpinelSocketShim.unsupported("BasicSocket#sendmsg destination")
+      end
       if controls
+        rights = controls.unix_rights
+        if rights && rights.length > 0
+          return SpinelSocketNative.sx_sendmsg_fd(@fd, data.to_s, rights[0].fileno)
+        end
         SpinelSocketShim.unsupported("BasicSocket#sendmsg controls")
       end
-      send(data, flags, dest_sockaddr)
+      send(data, flags, dest_sockaddr, nil)
     end
 
     def sendmsg_nonblock(data, flags = 0, dest_sockaddr = nil, controls = nil)
-      SpinelSocketNative.sp_net_set_nonblock(@fd)
+      if dest_sockaddr
+        SpinelSocketShim.unsupported("BasicSocket#sendmsg_nonblock destination")
+      end
+      SpinelSocketNative.sx_set_nonblock(@fd)
       sendmsg(data, flags, dest_sockaddr, controls)
     end
 
     def write(data)
-      SpinelSocketNative.sp_net_write_str(@fd, data)
+      SpinelSocketNative.sp_net_write_str(@fd, data.to_s)
     end
 
     def readpartial(maxlen)
@@ -134,6 +223,14 @@ else
       @fd < 0
     end
 
+    def fileno
+      @fd
+    end
+
+    def to_i
+      @fd
+    end
+
     def close_read
       shutdown(Socket::SHUT_RD)
     end
@@ -143,31 +240,29 @@ else
     end
 
     def shutdown(how = Socket::SHUT_RDWR)
-      SpinelSocketShim.unsupported("BasicSocket#shutdown")
+      SpinelSocketNative.sx_shutdown(@fd, how)
     end
 
     def getsockname
-      if @local_host && @local_port
-        Socket.pack_sockaddr_in(@local_port, @local_host)
-      else
-        ""
-      end
+      packed = SpinelSocketNative.sx_getsockname(@fd)
+      return packed if packed && packed != ""
+      return Socket.pack_sockaddr_in(@local_port, @local_host) if @local_host && @local_port
+      ""
     end
 
     def getpeername
-      if @remote_host && @remote_port
-        Socket.pack_sockaddr_in(@remote_port, @remote_host)
-      else
-        ""
-      end
+      packed = SpinelSocketNative.sx_getpeername(@fd)
+      return packed if packed && packed != ""
+      return Socket.pack_sockaddr_in(@remote_port, @remote_host) if @remote_host && @remote_port
+      ""
     end
 
     def getsockopt(level, optname)
-      SpinelSocketShim.unsupported("BasicSocket#getsockopt")
+      Socket::Option.int(Socket::AF_UNSPEC, level, optname, SpinelSocketNative.sx_getsockopt_int_str(@fd, level.to_s, optname.to_s))
     end
 
     def setsockopt(level, optname, optval)
-      SpinelSocketShim.unsupported("BasicSocket#setsockopt")
+      SpinelSocketNative.sx_setsockopt_int_str(@fd, level.to_s, optname.to_s, optval.to_s)
     end
 
     def local_address
@@ -191,7 +286,12 @@ else
     end
 
     def getpeereid
-      SpinelSocketShim.unsupported("BasicSocket#getpeereid")
+      uid = SpinelSocketNative.sx_getpeereid_uid(@fd)
+      gid = SpinelSocketNative.sx_getpeereid_gid(@fd)
+      if uid < 0 || gid < 0
+        raise "Failed to get peer credentials."
+      end
+      [uid, gid]
     end
   end
 
@@ -316,37 +416,89 @@ else
 
   class UDPSocket < IPSocket
     def initialize(domain = Socket::AF_INET)
-      SpinelSocketShim.unsupported("UDPSocket.new")
+      fd = SpinelSocketNative.sx_udp_socket(domain)
+      if fd < 0
+        raise "Failed to create UDP socket."
+      end
+      super(fd)
+      @socket_family = "udp"
     end
 
     def bind(host, port)
-      SpinelSocketShim.unsupported("UDPSocket#bind")
+      rc = SpinelSocketNative.sx_udp_bind(@fd, host.to_s, port)
+      if rc < 0
+        raise "Failed to bind UDP socket to #{host}:#{port}."
+      end
+      @local_host = host
+      @local_port = port
+      0
     end
 
     def connect(host, port)
-      SpinelSocketShim.unsupported("UDPSocket#connect")
+      rc = SpinelSocketNative.sx_udp_connect(@fd, host.to_s, port)
+      if rc < 0
+        raise "Failed to connect UDP socket to #{host}:#{port}."
+      end
+      @remote_host = host
+      @remote_port = port
+      0
     end
 
     def send(data, flags = 0, host = nil, port = nil)
-      SpinelSocketShim.unsupported("UDPSocket#send")
+      if host && port
+        SpinelSocketNative.sx_udp_sendto(@fd, data.to_s, flags, host.to_s, port)
+      else
+        SpinelSocketNative.sx_send_flags(@fd, data.to_s, flags)
+      end
     end
 
     def recvfrom_nonblock(maxlen, flags = 0)
-      SpinelSocketShim.unsupported("UDPSocket#recvfrom_nonblock")
+      SpinelSocketNative.sx_set_nonblock(@fd)
+      data = SpinelSocketNative.sx_udp_recvfrom(@fd, maxlen, flags)
+      addr = SpinelSocketNative.sx_last_recvfrom_addr
+      [data, addr]
     end
   end
 
   class UNIXSocket < BasicSocket
+    def self.__from_fd(fd, path = nil)
+      socket = new(fd)
+      socket.__set_path(path || "")
+      socket
+    end
+
     def self.pair(type = Socket::SOCK_STREAM, protocol = 0)
       socketpair(type, protocol)
     end
 
     def self.socketpair(type = Socket::SOCK_STREAM, protocol = 0)
-      SpinelSocketShim.unsupported("UNIXSocket.socketpair")
+      if type != Socket::SOCK_STREAM || protocol != 0
+        SpinelSocketShim.unsupported("UNIXSocket.socketpair type/protocol")
+      end
+      if SpinelSocketNative.sx_unix_socketpair < 0
+        raise "Failed to create UNIX socketpair."
+      end
+      [__from_fd(SpinelSocketNative.sx_unix_socketpair_first), __from_fd(SpinelSocketNative.sx_unix_socketpair_second)]
     end
 
-    def initialize(path)
-      SpinelSocketShim.unsupported("UNIXSocket.new")
+    def initialize(path_or_fd)
+      if path_or_fd.is_a?(Integer)
+        super(path_or_fd)
+        @socket_family = "unix"
+        @path = ""
+      else
+        fd = SpinelSocketNative.sx_unix_connect(path_or_fd.to_s)
+        if fd < 0
+          raise "Failed to connect UNIX socket #{path_or_fd}."
+        end
+        super(fd)
+        @socket_family = "unix"
+        @path = path_or_fd
+      end
+    end
+
+    def __set_path(path)
+      @path = path
     end
 
     def addr
@@ -366,29 +518,53 @@ else
     end
 
     def recv_io(klass = IO, mode = nil)
-      SpinelSocketShim.unsupported("UNIXSocket#recv_io")
+      fd = SpinelSocketNative.sx_recv_fd(@fd)
+      if fd < 0
+        raise "Failed to receive file descriptor."
+      end
+      UNIXSocket.__from_fd(fd)
     end
 
     def send_io(io)
-      SpinelSocketShim.unsupported("UNIXSocket#send_io")
+      fd = io.fileno
+      rc = SpinelSocketNative.sx_send_fd(@fd, fd)
+      if rc < 0
+        raise "Failed to send file descriptor."
+      end
+      0
     end
   end
 
   class UNIXServer < UNIXSocket
+    def initialize(path)
+      fd = SpinelSocketNative.sx_unix_server(path.to_s)
+      if fd < 0
+        raise "Failed to listen on UNIX socket #{path}."
+      end
+      super(fd)
+      @socket_family = "unix_server"
+      @path = path
+    end
+
     def accept
-      SpinelSocketShim.unsupported("UNIXServer#accept")
+      client_fd = SpinelSocketNative.sx_socket_accept(@fd)
+      if client_fd < 0
+        raise "No pending connection."
+      end
+      UNIXSocket.__from_fd(client_fd, @path)
     end
 
     def accept_nonblock
-      SpinelSocketShim.unsupported("UNIXServer#accept_nonblock")
+      SpinelSocketNative.sx_set_nonblock(@fd)
+      accept
     end
 
     def listen(backlog)
-      SpinelSocketShim.unsupported("UNIXServer#listen")
+      SpinelSocketNative.sx_socket_listen_str(@fd, backlog.to_s)
     end
 
     def sysaccept
-      SpinelSocketShim.unsupported("UNIXServer#sysaccept")
+      SpinelSocketNative.sx_socket_accept(@fd)
     end
   end
 
@@ -481,6 +657,10 @@ else
     class EINPROGRESSWaitWritable < WaitWritable
     end
 
+    def self.for_fd(fd)
+      BasicSocket.for_fd(fd)
+    end
+
     def self.tcp(host, port, local_host = nil, local_port = nil)
       socket = TCPSocket.new(host, port)
       if block_given?
@@ -525,47 +705,85 @@ else
     end
 
     def self.udp_server_sockets(host, port)
-      SpinelSocketShim.unsupported("Socket.udp_server_sockets")
+      socket = UDPSocket.new
+      socket.bind(host, port)
+      [socket]
     end
 
     def self.udp_server_loop(host, port)
-      SpinelSocketShim.unsupported("Socket.udp_server_loop")
+      udp_server_loop_on(udp_server_sockets(host, port))
     end
 
     def self.udp_server_loop_on(sockets)
-      SpinelSocketShim.unsupported("Socket.udp_server_loop_on")
+      loop do
+        data, sender = udp_server_recv(sockets)
+        yield data, sender
+      end
     end
 
     def self.udp_server_recv(sockets)
-      SpinelSocketShim.unsupported("Socket.udp_server_recv")
+      sockets[0].recvfrom_nonblock(65535)
     end
 
     def self.unix(path)
-      SpinelSocketShim.unsupported("Socket.unix")
+      socket = UNIXSocket.new(path)
+      if block_given?
+        begin
+          yield socket
+        ensure
+          socket.close
+        end
+      else
+        socket
+      end
     end
 
     def self.unix_server_socket(path)
-      SpinelSocketShim.unsupported("Socket.unix_server_socket")
+      UNIXServer.new(path)
     end
 
     def self.unix_server_loop(path)
-      SpinelSocketShim.unsupported("Socket.unix_server_loop")
+      server = UNIXServer.new(path)
+      begin
+        loop do
+          yield server.accept
+        end
+      ensure
+        server.close
+      end
     end
 
-    def self.pair(domain = AF_UNIX, type = SOCK_STREAM, protocol = 0)
-      socketpair(domain, type, protocol)
+    def self.pair(domain = AF_UNIX, socket_type = SOCK_STREAM, protocol = 0)
+      socketpair(domain, socket_type, protocol)
     end
 
-    def self.socketpair(domain = AF_UNIX, type = SOCK_STREAM, protocol = 0)
-      SpinelSocketShim.unsupported("Socket.socketpair")
+    def self.socketpair(domain = AF_UNIX, socket_type = SOCK_STREAM, protocol = 0)
+      if domain != AF_UNIX
+        SpinelSocketShim.unsupported("Socket.socketpair non-UNIX domain")
+      end
+      UNIXSocket.socketpair(socket_type, protocol)
     end
 
     def self.getaddrinfo(host, service, family = nil, socktype = nil, protocol = nil, flags = nil)
-      [[family || "AF_INET", service, host, host, family || AF_INET, socktype || SOCK_STREAM, protocol || 0]]
+      service_value = service || 0
+      family_value = family || AF_UNSPEC
+      socktype_value = socktype || SOCK_STREAM
+      protocol_value = protocol || 0
+      flags_value = flags || 0
+      info = SpinelSocketNative.sx_getaddrinfo_one(host.to_s, service_value, family_value, socktype_value, protocol_value, flags_value)
+      parts = info.split("|")
+      sockaddr = parts[0] || Socket.pack_sockaddr_in(service_value, host)
+      afamily = (parts[1] || family_value.to_s).to_i
+      stype = (parts[2] || socktype_value.to_s).to_i
+      proto = (parts[3] || protocol_value.to_s).to_i
+      unpacked = unpack_sockaddr_in(sockaddr)
+      [["AF_INET", unpacked[0], unpacked[1], sockaddr, afamily, stype, proto]]
     end
 
     def self.getnameinfo(sockaddr, flags = 0)
-      unpack_sockaddr_in(sockaddr)
+      result = SpinelSocketNative.sx_getnameinfo(sockaddr.to_s, flags)
+      parts = result.split("|")
+      [parts[0] || "", parts[1] || ""]
     end
 
     def self.gethostbyname(host)
@@ -577,23 +795,52 @@ else
     end
 
     def self.gethostname
-      SpinelSocketShim.unsupported("Socket.gethostname")
+      SpinelSocketNative.sx_gethostname
     end
 
     def self.getifaddrs
-      SpinelSocketShim.unsupported("Socket.getifaddrs")
+      count = SpinelSocketNative.sx_ifaddr_count
+      results = []
+      index = 0
+      while index < count
+        family = SpinelSocketNative.sx_ifaddr_family(index)
+        addr = __addrinfo_for_native_ip(family, SpinelSocketNative.sx_ifaddr_addr(index))
+        netmask = __addrinfo_for_native_ip(family, SpinelSocketNative.sx_ifaddr_netmask(index))
+        broadaddr = __addrinfo_for_native_ip(family, SpinelSocketNative.sx_ifaddr_broadaddr(index))
+        dstaddr = __addrinfo_for_native_ip(family, SpinelSocketNative.sx_ifaddr_dstaddr(index))
+        results.push(Socket::Ifaddr.new(
+          SpinelSocketNative.sx_ifaddr_name(index),
+          SpinelSocketNative.sx_ifaddr_ifindex(index),
+          SpinelSocketNative.sx_ifaddr_flags(index),
+          addr,
+          netmask,
+          broadaddr,
+          dstaddr
+        ))
+        index = index + 1
+      end
+      results
     end
 
     def self.ip_address_list
-      SpinelSocketShim.unsupported("Socket.ip_address_list")
+      addrs = []
+      getifaddrs.each do |ifaddr|
+        addrs.push(ifaddr.addr) if ifaddr.addr
+      end
+      addrs
+    end
+
+    def self.__addrinfo_for_native_ip(family, address)
+      return nil if !address || address == ""
+      Addrinfo.new(family, 0, 0, address, 0, nil)
     end
 
     def self.getservbyname(service, protocol = "tcp")
-      SpinelSocketShim.unsupported("Socket.getservbyname")
+      SpinelSocketNative.sx_getservbyname_port(service.to_s, protocol.to_s)
     end
 
     def self.getservbyport(port, protocol = "tcp")
-      SpinelSocketShim.unsupported("Socket.getservbyport")
+      SpinelSocketNative.sx_getservbyport_name_str(port.to_s, protocol.to_s)
     end
 
     def self.pack_sockaddr_in(port, host)
@@ -605,14 +852,15 @@ else
     end
 
     def self.unpack_sockaddr_in(sockaddr)
-      parts = sockaddr.split(":")
+      text = sockaddr.to_s
+      parts = text.split(":")
       host = parts[0] || "0.0.0.0"
       port_text = parts[1] || "0"
       [port_text.to_i, host]
     end
 
     def self.pack_sockaddr_un(path)
-      path
+      path.to_s
     end
 
     def self.sockaddr_un(path)
@@ -620,60 +868,97 @@ else
     end
 
     def self.unpack_sockaddr_un(sockaddr)
-      sockaddr
+      sockaddr.to_s
     end
 
-    def initialize(domain = AF_INET, type = SOCK_STREAM, protocol = 0)
-      SpinelSocketShim.unsupported("Socket.new")
+    def self.native_constants
+      [
+        SpinelSocketNative.sx_const_af_unspec,
+        SpinelSocketNative.sx_const_af_unix,
+        SpinelSocketNative.sx_const_af_inet,
+        SpinelSocketNative.sx_const_af_inet6,
+        SpinelSocketNative.sx_const_sock_stream,
+        SpinelSocketNative.sx_const_sock_dgram,
+        SpinelSocketNative.sx_const_sol_socket,
+        SpinelSocketNative.sx_const_so_reuseaddr,
+        SpinelSocketNative.sx_const_so_reuseport,
+        SpinelSocketNative.sx_const_tcp_nodelay,
+        SpinelSocketNative.sx_const_shut_rd,
+        SpinelSocketNative.sx_const_shut_wr,
+        SpinelSocketNative.sx_const_shut_rdwr
+      ]
+    end
+
+    def initialize(domain = AF_INET, socket_type = SOCK_STREAM, protocol = 0)
+      if domain == AF_INET && socket_type == SOCK_STREAM && protocol == 0
+        fd = SpinelSocketNative.sx_socket_create_tcp
+      elsif domain == SpinelSocketNative.sx_const_af_inet6 && socket_type == SOCK_STREAM && protocol == 0
+        fd = SpinelSocketNative.sx_socket_create_tcp6
+      else
+        fd = SpinelSocketNative.sx_socket_create(domain, socket_type, protocol)
+      end
+      if fd < 0
+        raise "Failed to create socket errno=#{SpinelSocketNative.sx_last_errno}."
+      end
+      super(fd)
+      @socket_family = "socket"
+      @socket_domain = domain
+      @socket_type = socket_type
+      @socket_protocol = protocol
     end
 
     def accept
-      client_fd = SpinelSocketNative.sp_net_accept(@fd)
+      client_fd = SpinelSocketNative.sx_socket_accept(@fd)
       if client_fd < 0
         raise "No pending connection."
       end
-      [Socket.for_fd(client_fd), ""]
+      [BasicSocket.for_fd(client_fd), SpinelSocketNative.sx_getpeername(client_fd)]
     end
 
     def accept_nonblock
-      SpinelSocketNative.sp_net_set_nonblock(@fd)
-      client_fd = SpinelSocketNative.sp_net_accept_nb(@fd)
-      if client_fd < 0
-        raise "No pending connection."
-      end
-      [Socket.for_fd(client_fd), ""]
+      SpinelSocketNative.sx_set_nonblock(@fd)
+      accept
     end
 
     def bind(sockaddr)
-      SpinelSocketShim.unsupported("Socket#bind")
+      rc = SpinelSocketNative.sx_socket_bind(@fd, sockaddr.to_s)
+      if rc < 0
+        raise "Failed to bind socket."
+      end
+      0
     end
 
     def connect(sockaddr)
-      SpinelSocketShim.unsupported("Socket#connect")
+      rc = SpinelSocketNative.sx_socket_connect(@fd, sockaddr.to_s)
+      if rc < 0
+        raise "Failed to connect socket."
+      end
+      0
     end
 
     def connect_nonblock(sockaddr)
-      SpinelSocketShim.unsupported("Socket#connect_nonblock")
+      SpinelSocketNative.sx_set_nonblock(@fd)
+      connect(sockaddr)
     end
 
     def listen(backlog)
-      SpinelSocketShim.unsupported("Socket#listen")
+      SpinelSocketNative.sx_socket_listen_str(@fd, backlog.to_s)
     end
 
     def recvfrom(maxlen, flags = 0)
-      [recv(maxlen, flags), ""]
+      [recv(maxlen, flags), getpeername]
     end
 
     def recvfrom_nonblock(maxlen, flags = 0)
-      [recv_nonblock(maxlen, flags), ""]
+      [recv_nonblock(maxlen, flags), getpeername]
     end
 
     def sysaccept
-      SpinelSocketNative.sp_net_accept(@fd)
+      SpinelSocketNative.sx_socket_accept(@fd)
     end
 
     def ipv6only!
-      SpinelSocketShim.unsupported("Socket#ipv6only!")
+      SpinelSocketNative.sx_ipv6only(@fd)
     end
   end
 
@@ -813,6 +1098,7 @@ else
     def connect_internal(local_addrinfo = nil)
       connect
     end
+    private :connect_internal
 
     def bind
       TCPServer.new(ip_address, ip_port)
@@ -831,14 +1117,7 @@ else
     end
 
     def marshal_load(values)
-      @afamily = values[0]
-      @pfamily = @afamily
-      @socktype = values[1]
-      @protocol = values[2]
-      @ip_address = values[3]
-      @ip_port = values[4]
-      @unix_path = values[5]
-      @canonname = nil
+      nil
     end
 
     def ipv4_loopback?
@@ -1035,8 +1314,12 @@ else
       @data
     end
 
-    def cmsg_is?(family, level, type)
-      @family == family && @level == level && @type == type
+    def cmsg_is?(level, type, family = nil)
+      if family
+        @family == family && @level == level && @type == type
+      else
+        @level == level && @type == type
+      end
     end
 
     def int

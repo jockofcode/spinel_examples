@@ -187,6 +187,36 @@ Probe examples:
   pack/unpack, StringIO, and Marshal. Avoid text transforms on embedded-NUL
   strings unless the example is specifically about that limitation.
 
+### Poly-string method dispatch (whole-program inference gap)
+
+When a string value is inferred as *polymorphic* (`sp_RbVal`) rather than a
+concrete `String` -- which happens when it is sliced out of another value and
+then crosses method-return boundaries in a larger program -- Spinel dispatches
+only a subset of `String` methods on it at runtime, even though `#class`
+reports `String`. Observed while building `source/token_api.rb`: a token pulled
+out of an HTTP `Authorization` header (`line.split(" ")[2]`, returned from a
+helper, then passed to another helper) raised `undefined method 'index'` /
+`'split'` at runtime.
+
+Confirmed on such a poly string:
+
+- Works: `#length`, single-index `#[]` (e.g. `s[i]`), `==`, `#start_with?`,
+  string concatenation (`user + ch`, `"" + s`).
+- Fails at runtime: `#index`, `#split`, and range/`begin...end` slicing
+  (`s[0...n]`, `s[i..-1]` returned a single character instead of a substring).
+
+The failure is context-dependent: the same helper compiles and runs correctly
+in a small standalone probe but fails inside the full program, because
+whole-program inference degrades the variable's static type. `"" + value`
+materializes a runtime `String` but does **not** restore the missing methods.
+
+Workaround used in `token_api.rb`: parse the poly string with a manual
+character loop that relies only on `#length`, single-index `#[]`, `==`, and
+concatenation -- e.g. to split `"user.signature"` on the first `.`, walk the
+characters and build `user` / `sig` by appending one char at a time. Prefer
+this pattern over `#split` / `#index` / range slices whenever a string is
+derived from parsed network or `recv` input and then handed across methods.
+
 ## Array and Enumerable Gaps
 
 Ruby's `Array` docs include many methods inherited from or related to

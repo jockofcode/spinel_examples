@@ -1,6 +1,21 @@
-# simple_server_6.rb
+# simple_server_6.rb -- FyelSrvr: a standalone static file server.
+#
+# The final step of the FyelSrvr progression: serves files and directory
+# listings with content-type detection, download dispositions, parent-dir
+# links, file sizes, an optional index.html handoff, and path-traversal
+# defense. Networking comes from socket_shim.rb, which presents a Ruby-shaped
+# TCPServer over Spinel's sp_net FFI (and the real socket library under CRuby).
+#
+# Compile: spinel source/simple_server_6.rb -o bin/fyel_srvr
+# Run:     ./bin/fyel_srvr -p 8080 [--no-index]
+#          Then open http://localhost:8080/ . Serve from the repo root so the
+#          server's "." maps to files you expect (e.g. public/, index.html).
 require_relative "socket_shim"
 
+# Flag parsing is a hand-rolled ARGV loop rather than optparse: it keeps this
+# example dependency-free and mirrors the earlier servers in the progression.
+# -p PORT sets the listen port; --no-index forces directory listings even when
+# an index.html is present.
 port = 8080
 serve_index = true
 arg_index = 0
@@ -18,6 +33,10 @@ while arg_index < ARGV.length
   arg_index = arg_index + 1
 end
 
+# Collapse a request path into a safe, normalized form. Splitting on "/" and
+# dropping "" and "." segments while popping on ".." means a crafted URL like
+# /../../etc/passwd can never escape the server root -- the ".." pops never go
+# above the empty segment list, so the result is always root-relative.
 def sanitize_path(raw_path)
   clean = raw_path.gsub("\\", "/")
   segments = clean.split("/")
@@ -34,6 +53,8 @@ def sanitize_path(raw_path)
   "/" + safe_segments.join("/")
 end
 
+# Render a byte count as a human-readable size (B / KB / MB) using integer
+# math only, so the listing stays readable without pulling in a formatting lib.
 def format_file_size(bytes)
   if bytes < 1024
     return "#{bytes} B"
@@ -48,6 +69,8 @@ def format_file_size(bytes)
   end
 end
 
+# Build an HTML directory index for dir_path. requested_path is the URL the
+# client asked for and is used to build correct child links and a parent link.
 def build_directory_list(dir_path, requested_path)
   base_url = requested_path.end_with?("/") ? requested_path : "#{requested_path}/"
   
@@ -60,11 +83,11 @@ def build_directory_list(dir_path, requested_path)
   html += "</head><body>"
   html += "<h1>Index of #{requested_path}</h1><hr><ul>"
 
-  # CONDITION 1: Inject a parent directory link if we are not at the application root folder
+  # Add a parent-directory link unless we are already at the server root.
   if requested_path != "/" && requested_path != ""
-    # Compute parent path relative to current requested URL path
+    # The parent URL is this path with its last segment removed.
     path_parts = requested_path.split("/")
-    path_parts.pop # Remove current trailing folder segment
+    path_parts.pop
     parent_path = path_parts.join("/")
     parent_path = "/" if parent_path == ""
     
@@ -92,9 +115,13 @@ def build_directory_list(dir_path, requested_path)
   html
 end
 
+# Read a file and pick its Content-Type from the extension. Known web types
+# are served inline; everything else is sent as an attachment download.
+# Returns the [status, content_type, disposition, body] tuple handle_request
+# passes on to the response builder.
 def serve_file_payload(local_path)
   body = File.read(local_path)
-  
+
   content_type = "application/octet-stream"
   is_web_file = false
 
@@ -134,6 +161,9 @@ def serve_file_payload(local_path)
   ["200 OK", content_type, disposition, body]
 end
 
+# Map a requested URL path to a response tuple. Sanitizes the path, resolves
+# it against the current directory, and returns 404, a directory listing, an
+# index.html payload, or a file payload as appropriate.
 def handle_request(path, serve_index)
   safe_url_path = sanitize_path(path)
   local_path = ".#{safe_url_path}"
@@ -144,13 +174,13 @@ def handle_request(path, serve_index)
   end
 
   if File.directory?(local_path)
-    # CONDITION 2: Check for automatic index.html interception
-    # We strip any duplicated slashes to ensure paths map cleanly to disk
+    # For a directory, prefer its index.html (unless --no-index was given),
+    # otherwise render a listing. The separator guard avoids a double slash.
     separator = local_path.end_with?("/") ? "" : "/"
     index_html_path = "#{local_path}#{separator}index.html"
-    
+
     if serve_index && File.exist?(index_html_path) && !File.directory?(index_html_path)
-      # Silently route to the index.html payload instead of displaying a directory listing
+      # Serve the index.html file in place of a directory listing.
       return serve_file_payload(index_html_path)
     else
       body = build_directory_list(local_path, safe_url_path)
@@ -161,12 +191,17 @@ def handle_request(path, serve_index)
   end
 end
 
+# Handle one client connection: read the request, extract the path from the
+# request line, build the response, and always close the socket via ensure.
+# Connection: close keeps the loop simple -- one request per connection.
 def respond_to_client(client, serve_index)
   begin
     raw_request = client.recv(2048)
     lines = raw_request.split("\r\n")
     request_line = lines[0] || ""
 
+    # Request line looks like "GET /path?query HTTP/1.1"; take the path and
+    # drop any query string.
     parts = request_line.split(" ")
     path = parts[1] || "/"
     path = path.split("?")[0] || "/"
@@ -187,6 +222,8 @@ def respond_to_client(client, serve_index)
   end
 end
 
+# Bind the port and accept connections forever, serving each one in turn.
+# A bind failure (e.g. port in use) is reported and the server exits cleanly.
 def start_server(port, serve_index)
   begin
     TCPServer.open("0.0.0.0", port) do |server|

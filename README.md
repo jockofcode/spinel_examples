@@ -1,10 +1,13 @@
-# FyelSrvr and Spinel Examples
+# Spinel Examples: 5 Real Apps Compiled with Spinel
 
-Small Ruby examples for learning the
-[Spinel](https://github.com/matz/spinel) ahead-of-time compiler.
+A set of professional example applications for learning the
+[Spinel](https://github.com/matz/spinel) ahead-of-time Ruby-to-C compiler.
+Each app is well-commented, compiles to a standalone native binary, and also
+runs unmodified under plain `ruby`.
 
-The examples start with native socket calls and end with `FyelSrvr`, a tiny
-static-file server that compiles to a standalone binary.
+The repository ships five apps, a one-command build/smoke-test script
+(`scripts/build_all.sh`), and a self-contained meetup slideshow
+(`slides.html`).
 
 ## What's Here
 
@@ -12,19 +15,40 @@ static-file server that compiles to a standalone binary.
 .
 ├── README.md
 ├── .tool-versions
-├── index.html
-├── public/
-└── source/
-    ├── socket_shim.rb
-    ├── simple_server_1.rb
-    ├── simple_server_2.rb
-    ├── simple_server_3.rb
-    ├── simple_server_4.rb
-    ├── simple_server_5.rb
-    └── simple_server_6.rb
+├── index.html            # demo page served by FyelSrvr
+├── slides.html           # self-contained meetup slideshow
+├── bin/                  # compiled binaries (generated)
+├── data/
+│   └── sample_access.log # sample input for log_report
+├── native/
+│   └── socket_ext/       # C extension for the raw-socket example
+├── notes/                # Spinel reference + method-gap notes
+├── public/               # static assets for the file-server demo
+├── scripts/
+│   └── build_all.sh      # build all apps + smoke test each
+├── source/               # all five apps + the FyelSrvr progression
+│   ├── socket_shim.rb
+│   ├── simple_server_1.rb .. simple_server_6.rb  # FyelSrvr build-up
+│   ├── todo_cli.rb
+│   ├── log_report.rb
+│   ├── token_api.rb
+│   └── parallel_digest.rb
+└── tests/                # CRuby tests for socket_shim
 ```
 
-`fyel_srvr` is generated. Rebuild it whenever you want a fresh binary.
+Binaries in `bin/` are generated. Rebuild them whenever you want fresh copies.
+
+## Apps
+
+| App | Source | Compile | Run | Showcases |
+|-----|--------|---------|-----|-----------|
+| FyelSrvr | `source/simple_server_6.rb` | `spinel source/simple_server_6.rb -o bin/fyel_srvr` | `./bin/fyel_srvr -p 8080` | Sockets, HTTP, directory listings, path-traversal defense |
+| todo_cli | `source/todo_cli.rb` | `SPINEL_REQUIRE_GATE=1 spinel source/todo_cli.rb -o bin/todo_cli` | `./bin/todo_cli add "write slides"` | CLI flags + `json` persistence round-trip |
+| log_report | `source/log_report.rb` | `SPINEL_REQUIRE_GATE=1 spinel source/log_report.rb -o bin/log_report` | `./bin/log_report data/sample_access.log` | Named-capture Regexp, `StringScanner`, `Set` |
+| token_api | `source/token_api.rb` | `SPINEL_REQUIRE_GATE=1 spinel source/token_api.rb -o bin/token_api` | `./bin/token_api -p 8080` | JSON API, HMAC tokens via FFI (`sp_crypto`) |
+| parallel_digest | `source/parallel_digest.rb` | `SPINEL_REQUIRE_GATE=1 spinel source/parallel_digest.rb -o bin/parallel_digest` | `./bin/parallel_digest source -w 4` | `Thread` / `Queue` / `Mutex` worker pool |
+
+Every app also runs under CRuby, e.g. `ruby source/todo_cli.rb list`.
 
 ## Install Spinel
 
@@ -45,18 +69,35 @@ export PATH="$PWD/bin:$PATH"
 cd -
 ```
 
-## Build and Run
+## Build everything
+
+The fastest way to build all five apps and confirm each one runs:
+
+```bash
+sh scripts/build_all.sh
+```
+
+It compiles every app into `bin/` and smoke-tests each one, printing
+`ALL GREEN` on success (and exiting non-zero if anything fails).
+
+## Build and Run (individually)
 
 Compile the final server:
 
 ```bash
-spinel source/simple_server_6.rb -o fyel_srvr
+spinel source/simple_server_6.rb -o bin/fyel_srvr
+```
+
+Compile the raw socket example with the project-local native extension:
+
+```bash
+spinel --link native/socket_ext/socket_ext.c source/simple_server_1.rb -o bin/simple_server_1
 ```
 
 Run it:
 
 ```bash
-./fyel_srvr -p 8080
+./bin/fyel_srvr -p 8080
 ```
 
 Then open `http://localhost:8080/`.
@@ -67,20 +108,25 @@ For quick experiments, Spinel can compile and run in one step:
 spinel -E source/simple_server_6.rb -p 8080
 ```
 
-## The Examples
+## How FyelSrvr was built up
 
-- `simple_server_1.rb`: raw POSIX socket bindings with `extern`
+FyelSrvr (`simple_server_6.rb`) is the end of a six-step progression, each
+step adding one idea:
+
+- `simple_server_1.rb`: raw `Socket.new` / `bind` / `listen` / `accept` through the native extension
 - `simple_server_2.rb`: a tiny HTTP response with Ruby-shaped `TCPServer`
 - `simple_server_3.rb`: request parsing and a few hard-coded routes
 - `simple_server_4.rb`: `-p`, static files, and directory listings
 - `simple_server_5.rb`: `-p`, path cleanup, more content types, downloads
 - `simple_server_6.rb`: `-p`, `--no-index`, parent links, icons, file sizes
 
-`socket_shim.rb` is the small compatibility layer that lets the later
-examples run under CRuby with `socket` and under Spinel with the same
-`TCPServer` / `TCPSocket` calls.
+`socket_shim.rb` is the small compatibility layer that lets examples run
+under CRuby with `socket` and under Spinel with the same Ruby-shaped socket
+calls. The later web-server examples use Spinel's built-in `sp_net` helpers
+and compile without extra link inputs; lower-level socket features use
+`native/socket_ext/socket_ext.c`.
 
-## Try It
+## Try It (FyelSrvr)
 
 Landing page:
 
@@ -98,7 +144,7 @@ By default, directories serve `index.html` when present. To always show
 directory contents instead:
 
 ```bash
-./fyel_srvr -p 8080 --no-index
+./bin/fyel_srvr -p 8080 --no-index
 ```
 
 Traversal check:
@@ -108,6 +154,18 @@ curl -i --path-as-is http://localhost:8080/../../etc/passwd
 ```
 
 That last request should return `404 Not Found`.
+
+## Slideshow
+
+`slides.html` is a self-contained deck (no external assets) built for a Ruby
+Meetup talk that tours these five apps. Open it in any browser:
+
+```bash
+open slides.html
+```
+
+Navigate with the arrow keys or the on-screen ‹ › buttons; `#12` in the URL
+jumps to a specific slide.
 
 ## Notes
 

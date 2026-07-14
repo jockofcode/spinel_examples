@@ -1,7 +1,7 @@
-# todo_cli.rb -- a small command-line task manager with JSON persistence.
+# todo_cli.rb, a small command-line task manager with JSON persistence.
 #
 # Demonstrates a professional CLI pattern in Spinel: a small hand-rolled flag
-# parser, durable state via `json`, and File IO -- all ahead-of-time compiled
+# parser, durable state via `json`, and File IO, all ahead-of-time compiled
 # to a single binary. Tasks are stored as an array of plain Hashes so they
 # round-trip cleanly through JSON (string keys on load).
 #

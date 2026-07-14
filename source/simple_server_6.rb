@@ -1,4 +1,4 @@
-# simple_server_6.rb -- FyelSrvr: a standalone static file server.
+# simple_server_6.rb, FyelSrvr: a standalone static file server.
 #
 # The final step of the FyelSrvr progression: serves files and directory
 # listings with content-type detection, download dispositions, parent-dir
@@ -35,7 +35,7 @@ end
 
 # Collapse a request path into a safe, normalized form. Splitting on "/" and
 # dropping "" and "." segments while popping on ".." means a crafted URL like
-# /../../etc/passwd can never escape the server root -- the ".." pops never go
+# /../../etc/passwd can never escape the server root, the ".." pops never go
 # above the empty segment list, so the result is always root-relative.
 def sanitize_path(raw_path)
   clean = raw_path.gsub("\\", "/")
@@ -193,7 +193,7 @@ end
 
 # Handle one client connection: read the request, extract the path from the
 # request line, build the response, and always close the socket via ensure.
-# Connection: close keeps the loop simple -- one request per connection.
+# Connection: close keeps the loop simple, one request per connection.
 def respond_to_client(client, serve_index)
   begin
     raw_request = client.recv(2048)

@@ -1,4 +1,4 @@
-# parallel_digest.rb -- a worker-pool file hasher built on Thread/Queue/Mutex.
+# parallel_digest.rb, a worker-pool file hasher built on Thread/Queue/Mutex.
 #
 # Hashes every file under a directory with a fixed pool of worker threads fed
 # by a Queue, then prints each file's SHA-256 prefix. This is the "Ruby
@@ -6,7 +6,7 @@
 # and Mutex compile straight through Spinel and behave like real Ruby.
 #
 # Spinel runs Ruby threads as green threads multiplexed onto N OS workers with
-# NO GVL, so they can execute in genuine parallel -- which is exactly why the
+# NO GVL, so they can execute in genuine parallel, which is exactly why the
 # shared state below must be guarded by a Mutex. Note an honest caveat this
 # example makes concrete: Spinel's File.read and Digest.hexdigest currently use
 # shared static buffers and are NOT thread-safe, so the read+hash step is held
@@ -87,7 +87,7 @@ SKIP_DIRS = { "bin" => true, ".git" => true, "tmp" => true }
 #
 #  1. File.read and Digest::SHA256.hexdigest each return a shared, process-wide
 #     static buffer. With two green threads live, a second thread's call
-#     overwrites the buffer before the first has copied it out -- producing
+#     overwrites the buffer before the first has copied it out, producing
 #     blank or mismatched hashes. There is no thread-safe Digest instance
 #     #update API either. So the read+hash MUST be serialized.
 #  2. The shared results collection must not be mutated by two threads at once.
@@ -95,7 +95,7 @@ SKIP_DIRS = { "bin" => true, ".git" => true, "tmp" => true }
 # Because of (1), guarding just the append is not enough: the entire read+hash
 # runs inside mutex.synchronize, so exactly one thread touches those static
 # buffers at a time. That makes the hashing effectively serial on Spinel today
-# -- and that is precisely the lesson this example teaches: under a no-GVL M:N
+#, and that is precisely the lesson this example teaches: under a no-GVL M:N
 # runtime you get real parallelism, so any shared/static-buffer library must be
 # treated as a critical section. The Thread/Queue/Mutex machinery is entirely
 # real; the Mutex is what makes it correct. synchronize is compiler-inlined
@@ -187,13 +187,13 @@ mutex = Mutex.new
 
 # Enqueue every path, then push one nil "poison pill" per worker. A worker that
 # pops nil knows the work is done and exits its loop. (Queue#close would also
-# work -- pop returns nil on a drained, closed queue -- but explicit sentinels
+# work, pop returns nil on a drained, closed queue, but explicit sentinels
 # make the one-pill-per-worker handshake obvious.)
 files.each { |file_path| queue << file_path }
 workers.times { queue << nil }
 
 # Spawn the worker pool. The block does nothing but call worker_loop, so no
-# per-item state lives in the (shared) block scope -- see worker_loop.
+# per-item state lives in the (shared) block scope, see worker_loop.
 threads = []
 workers.times do
   threads << Thread.new do

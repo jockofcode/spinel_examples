@@ -1,4 +1,4 @@
-# simple_server_3.rb -- request parsing and a few hard-coded routes.
+# simple_server_3.rb, request parsing and a few hard-coded routes.
 #
 # Step 3 of the FyelSrvr progression: parses the HTTP request line to extract
 # the method and path, then dispatches a small if/elsif routing table that

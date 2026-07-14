@@ -1,8 +1,8 @@
-# log_report.rb -- an access-log analyzer for Common Log Format.
+# log_report.rb, an access-log analyzer for Common Log Format.
 #
 # Reads a web-server access log and prints a summary report: totals, requests
 # by status code, the busiest paths, and total bytes served. This is the
-# "text processing is where Ruby shines -- and it compiles" example: it leans
+# "text processing is where Ruby shines, and it compiles" example: it leans
 # on named-capture regexps, MatchData, StringScanner, and Set, all AOT-compiled
 # by Spinel into a single native binary.
 #
@@ -47,7 +47,7 @@ end
 
 
 # Sort a Hash of {key => count} into an array of [key, count] pairs, highest
-# count first, breaking ties by key so the output is fully deterministic --
+# count first, breaking ties by key so the output is fully deterministic,
 # identical under CRuby and the Spinel binary regardless of sort stability.
 def sorted_by_count_desc(counts)
   pairs = counts.to_a

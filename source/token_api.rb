@@ -1,4 +1,4 @@
-# token_api.rb -- a tiny JSON REST API with HMAC-signed bearer tokens.
+# token_api.rb, a tiny JSON REST API with HMAC-signed bearer tokens.
 #
 # Real backend patterns with no framework, compiled to one binary: a hand-rolled
 # accept loop over socket_shim.rb, JSON request/response bodies, and
@@ -16,7 +16,7 @@ require_relative "socket_shim"
 require "json"
 
 # SECRET signs every token. In production this would be injected from the
-# environment or a secrets manager, never committed -- it is a literal here
+# environment or a secrets manager, never committed, it is a literal here
 # only to keep the example self-contained.
 SECRET = "spinel-demo-secret-do-not-ship"
 
@@ -108,7 +108,7 @@ end
 # --- in-memory data ------------------------------------------------------
 
 # Notes are a Hash keyed by integer id. Seeded with two entries; a counter
-# hands out new ids. This is process-local state -- restarting the server
+# hands out new ids. This is process-local state, restarting the server
 # resets it, which is fine for a demo.
 $notes = {
   1 => { "id" => 1, "text" => "matz says: optimize for programmer happiness" },
@@ -132,8 +132,8 @@ def json_response(status, obj)
 end
 
 # Pull the bearer token out of an Authorization header, or nil if absent.
-# We tokenize the header line by spaces -- the same split-based parsing the
-# other servers use on the request line -- so a line like
+# We tokenize the header line by spaces, the same split-based parsing the
+# other servers use on the request line, so a line like
 # "Authorization: Bearer <token>" yields ["Authorization:", "Bearer", token].
 # The field-name match is case-insensitive.
 def bearer_token(headers)

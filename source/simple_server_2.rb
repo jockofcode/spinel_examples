@@ -1,4 +1,4 @@
-# simple_server_2.rb -- a minimal HTTP "Hello World" over the socket shim.
+# simple_server_2.rb, a minimal HTTP "Hello World" over the socket shim.
 #
 # Step 2 of the FyelSrvr progression: the same idea as simple_server_1.rb but
 # using the Ruby-shaped TCPServer from socket_shim.rb instead of raw sockets.

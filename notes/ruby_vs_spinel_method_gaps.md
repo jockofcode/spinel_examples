@@ -43,7 +43,7 @@ Use this as the quick decision map for writing examples:
 |---|---|
 | Basic strings, arrays, hashes, ranges, numbers, regexp, file reads/writes, marshal, pack/unpack | Broadly available |
 | `json`, `base64`, `digest`, `stringio`, `strscan`, `set`, `optparse`, `erb` | Available through `require` with `SPINEL_REQUIRE_GATE=1` |
-| Socket/network helpers | `source/socket_shim.rb` provides a small `TCPServer` / `TCPSocket` compatibility layer over Spinel's `sp_net` helpers |
+| Socket/network helpers | `source/lib/socket_shim.rb` provides a small `TCPServer` / `TCPSocket` compatibility layer over Spinel's `sp_net` helpers |
 | Reflection and metaprogramming | Mostly unavailable or only works with compile-time literals |
 | Full Ruby stdlib such as `date`, `net/*`, `securerandom`, `pp`, `English` | Not available unless Spinel provides a package or the project provides one |
 | Encoding/transcoding/unicode normalization | Mostly unavailable; Spinel assumes UTF-8 / ASCII-8BIT boundaries |
@@ -474,7 +474,7 @@ Prefer these because they are supported and already fit Spinel's design:
 - Sets: `require "set"`
 - Static file work: `File.read`, `File.write`, `File.exist?`,
   `File.directory?`, `File.file?`, `File.size`, `File.join`
-- Networking: use the local `socket_shim.rb` compatibility layer for
+- Networking: use the local `lib/socket_shim.rb` compatibility layer for
   `TCPServer` / accepted socket methods; expand it or promote it into Spinel
   when examples need more of Ruby's `socket` API
 - Crypto helpers beyond `Digest`: FFI through a small `SpinelCrypto` wrapper

@@ -7,7 +7,7 @@ runs unmodified under plain `ruby`.
 
 The repository ships five apps, a one-command build/smoke-test script
 (`scripts/build_all.sh`), and a self-contained meetup slideshow
-(`slides.html`).
+(`slides/july_2026_ruby_meetup.html`).
 
 ## What's Here
 
@@ -16,7 +16,8 @@ The repository ships five apps, a one-command build/smoke-test script
 ├── README.md
 ├── .tool-versions
 ├── index.html            # demo page served by FyelSrvr
-├── slides.html           # self-contained meetup slideshow
+├── slides/
+│   └── july_2026_ruby_meetup.html   # self-contained meetup slideshow
 ├── bin/                  # compiled binaries (generated)
 ├── data/
 │   └── sample_access.log # sample input for log_report
@@ -27,8 +28,9 @@ The repository ships five apps, a one-command build/smoke-test script
 ├── scripts/
 │   └── build_all.sh      # build all apps + smoke test each
 ├── source/               # all five apps + the FyelSrvr progression
-│   ├── socket_shim.rb
-│   ├── simple_server_1.rb .. simple_server_6.rb  # FyelSrvr build-up
+│   ├── lib/
+│   │   └── socket_shim.rb                        # shared socket compatibility layer
+│   ├── fyel_srvr_1.rb .. fyel_srvr_6.rb          # FyelSrvr build-up
 │   ├── todo_cli.rb
 │   ├── log_report.rb
 │   ├── token_api.rb
@@ -42,7 +44,7 @@ Binaries in `bin/` are generated. Rebuild them whenever you want fresh copies.
 
 | App | Source | Compile | Run | Showcases |
 |-----|--------|---------|-----|-----------|
-| FyelSrvr | `source/simple_server_6.rb` | `spinel source/simple_server_6.rb -o bin/fyel_srvr` | `./bin/fyel_srvr -p 8080` | Sockets, HTTP, directory listings, path-traversal defense |
+| FyelSrvr | `source/fyel_srvr_6.rb` | `spinel source/fyel_srvr_6.rb -o bin/fyel_srvr` | `./bin/fyel_srvr -p 8080` | Sockets, HTTP, directory listings, path-traversal defense |
 | todo_cli | `source/todo_cli.rb` | `SPINEL_REQUIRE_GATE=1 spinel source/todo_cli.rb -o bin/todo_cli` | `./bin/todo_cli add "write slides"` | CLI flags + `json` persistence round-trip |
 | log_report | `source/log_report.rb` | `SPINEL_REQUIRE_GATE=1 spinel source/log_report.rb -o bin/log_report` | `./bin/log_report data/sample_access.log` | Named-capture Regexp, `StringScanner`, `Set` |
 | token_api | `source/token_api.rb` | `SPINEL_REQUIRE_GATE=1 spinel source/token_api.rb -o bin/token_api` | `./bin/token_api -p 8080` | JSON API, HMAC tokens via FFI (`sp_crypto`) |
@@ -86,13 +88,13 @@ It compiles every app into `bin/` and smoke-tests each one, printing
 Compile the final server:
 
 ```bash
-spinel source/simple_server_6.rb -o bin/fyel_srvr
+spinel source/fyel_srvr_6.rb -o bin/fyel_srvr
 ```
 
 Compile the raw socket example with the project-local native extension:
 
 ```bash
-spinel --link native/socket_ext/socket_ext.c source/simple_server_1.rb -o bin/simple_server_1
+spinel --link native/socket_ext/socket_ext.c source/fyel_srvr_1.rb -o bin/fyel_srvr_1
 ```
 
 Run it:
@@ -106,22 +108,22 @@ Then open `http://localhost:8080/`.
 For quick experiments, Spinel can compile and run in one step:
 
 ```bash
-spinel -E source/simple_server_6.rb -p 8080
+spinel -E source/fyel_srvr_6.rb -p 8080
 ```
 
 ## How FyelSrvr was built up
 
-FyelSrvr (`simple_server_6.rb`) is the end of a six-step progression, each
+FyelSrvr (`fyel_srvr_6.rb`) is the end of a six-step progression, each
 step adding one idea:
 
-- `simple_server_1.rb`: raw `Socket.new` / `bind` / `listen` / `accept` through the native extension
-- `simple_server_2.rb`: a tiny HTTP response with Ruby-shaped `TCPServer`
-- `simple_server_3.rb`: request parsing and a few hard-coded routes
-- `simple_server_4.rb`: `-p`, static files, and directory listings
-- `simple_server_5.rb`: `-p`, path cleanup, more content types, downloads
-- `simple_server_6.rb`: `-p`, `--no-index`, parent links, icons, file sizes
+- `fyel_srvr_1.rb`: raw `Socket.new` / `bind` / `listen` / `accept` through the native extension
+- `fyel_srvr_2.rb`: a tiny HTTP response with Ruby-shaped `TCPServer`
+- `fyel_srvr_3.rb`: request parsing and a few hard-coded routes
+- `fyel_srvr_4.rb`: `-p`, static files, and directory listings
+- `fyel_srvr_5.rb`: `-p`, path cleanup, more content types, downloads
+- `fyel_srvr_6.rb`: `-p`, `--no-index`, parent links, icons, file sizes
 
-`socket_shim.rb` is the small compatibility layer that lets examples run
+`lib/socket_shim.rb` is the small compatibility layer that lets examples run
 under CRuby with `socket` and under Spinel with the same Ruby-shaped socket
 calls. The later web-server examples use Spinel's built-in `sp_net` helpers
 and compile without extra link inputs; lower-level socket features use
@@ -158,11 +160,12 @@ That last request should return `404 Not Found`.
 
 ## Slideshow
 
-`slides.html` is a self-contained deck (no external assets) built for a Ruby
-Meetup talk that tours these five apps. Open it in any browser:
+`slides/july_2026_ruby_meetup.html` is a self-contained deck (no external
+assets) built for a Ruby Meetup talk that tours these five apps. Open it in
+any browser:
 
 ```bash
-open slides.html
+open slides/july_2026_ruby_meetup.html
 ```
 
 Navigate with the arrow keys or the on-screen ‹ › buttons; `#12` in the URL

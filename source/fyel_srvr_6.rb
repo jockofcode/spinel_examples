@@ -1,16 +1,16 @@
-# simple_server_6.rb, FyelSrvr: a standalone static file server.
+# fyel_srvr_6.rb, FyelSrvr: a standalone static file server.
 #
 # The final step of the FyelSrvr progression: serves files and directory
 # listings with content-type detection, download dispositions, parent-dir
 # links, file sizes, an optional index.html handoff, and path-traversal
-# defense. Networking comes from socket_shim.rb, which presents a Ruby-shaped
+# defense. Networking comes from lib/socket_shim.rb, which presents a Ruby-shaped
 # TCPServer over Spinel's sp_net FFI (and the real socket library under CRuby).
 #
-# Compile: spinel source/simple_server_6.rb -o bin/fyel_srvr
+# Compile: spinel source/fyel_srvr_6.rb -o bin/fyel_srvr
 # Run:     ./bin/fyel_srvr -p 8080 [--no-index]
 #          Then open http://localhost:8080/ . Serve from the repo root so the
 #          server's "." maps to files you expect (e.g. public/, index.html).
-require_relative "socket_shim"
+require_relative "lib/socket_shim"
 
 # Flag parsing is a hand-rolled ARGV loop rather than optparse: it keeps this
 # example dependency-free and mirrors the earlier servers in the progression.

@@ -33,12 +33,12 @@ RUN_FULL="${TEST_ALL:-0}"
 mkdir -p bin
 
 # --- build ----------------------------------------------------------------
-# simple_server_6 links only the sp_net FFI via socket_shim, so it needs no
+# fyel_srvr_6 links only the sp_net FFI via socket_shim, so it needs no
 # require gate. The other four use require-gated packages (json/optparse/
 # strscan/set/digest), so they compile with SPINEL_REQUIRE_GATE=1.
 
 echo "== building fyel_srvr =="
-spinel source/simple_server_6.rb -o bin/fyel_srvr
+spinel source/fyel_srvr_6.rb -o bin/fyel_srvr
 
 echo "== building todo_cli =="
 SPINEL_REQUIRE_GATE=1 spinel source/todo_cli.rb -o bin/todo_cli

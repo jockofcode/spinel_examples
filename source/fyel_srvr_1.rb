@@ -1,11 +1,11 @@
-# simple_server_1.rb
+# fyel_srvr_1.rb
 #
 # Raw Socket example. This one uses the project-local native socket extension
 # when compiled with Spinel:
 #
-#   spinel --link native/socket_ext/socket_ext.c source/simple_server_1.rb -o simple_server_1
+#   spinel --link native/socket_ext/socket_ext.c source/fyel_srvr_1.rb -o fyel_srvr_1
 
-require_relative "socket_shim"
+require_relative "lib/socket_shim"
 
 port = 8080
 arg_index = 0

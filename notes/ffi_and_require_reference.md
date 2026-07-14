@@ -36,7 +36,7 @@ they do not have a complete normal Ruby API in Spinel today.
 
 `lib/sp_net.c` and `lib/sp_net.h` contain socket, polling, process, and command
 helpers. The web/file-server examples expose the subset they need through
-`source/socket_shim.rb`.
+`source/lib/socket_shim.rb`.
 
 That file gives example code Ruby-shaped calls:
 
@@ -85,12 +85,12 @@ The current web examples use this Ruby-facing subset:
 
 | Ruby call | Spinel-backed native operation | Used by |
 |---|---|---|
-| `TCPServer.new("0.0.0.0", port)` | `sp_net_listen(port, 1)` | `simple_server_2.rb` through `simple_server_6.rb` |
-| `server.accept` | `sp_net_accept(server_fd)` | `simple_server_2.rb` through `simple_server_6.rb` |
-| `client.recv(2048)` | `sp_net_recv_some(fd, maxlen)` as `:binstr` | `simple_server_3.rb` through `simple_server_6.rb` |
+| `TCPServer.new("0.0.0.0", port)` | `sp_net_listen(port, 1)` | `fyel_srvr_2.rb` through `fyel_srvr_6.rb` |
+| `server.accept` | `sp_net_accept(server_fd)` | `fyel_srvr_2.rb` through `fyel_srvr_6.rb` |
+| `client.recv(2048)` | `sp_net_recv_some(fd, maxlen)` as `:binstr` | `fyel_srvr_3.rb` through `fyel_srvr_6.rb` |
 | `client.readpartial(2048)` | same as `recv` | available for future examples |
-| `client.write(response)` | `sp_net_write_str(fd, response)` | `simple_server_2.rb` through `simple_server_6.rb` |
-| `client.close` | `sp_net_close(fd)` | `simple_server_2.rb` through `simple_server_6.rb` |
+| `client.write(response)` | `sp_net_write_str(fd, response)` | `fyel_srvr_2.rb` through `fyel_srvr_6.rb` |
+| `client.close` | `sp_net_close(fd)` | `fyel_srvr_2.rb` through `fyel_srvr_6.rb` |
 
 ### `sp_crypto` -> Suggested Module: `SpinelCrypto`
 
@@ -124,12 +124,12 @@ wrapper as `:binstr`.
 
 ### Raw POSIX Calls -> Suggested Module: `PosixNet`
 
-`source/simple_server_1.rb` intentionally demonstrates lower-level POSIX FFI:
+`source/fyel_srvr_1.rb` intentionally demonstrates lower-level POSIX FFI:
 `socket`, `setsockopt`, `htons`, `bind`, `listen`, `accept`, `write`, and
 `close`.
 
 Keep this style only when the lesson is raw FFI. For practical examples, prefer
-the `socket_shim.rb` compatibility layer because it hides sockaddr packing
+the `lib/socket_shim.rb` compatibility layer because it hides sockaddr packing
 and keeps the example source close to CRuby.
 
 ## Bringing Your Own C (custom native code + `--link`)
@@ -138,7 +138,7 @@ Everything above binds symbols that already exist in the Spinel runtime
 (`sp_net_*`, `sp_crypto_*`) or in libc. You can also compile **your own** C file
 into the binary and call it from Ruby with the same `ffi_func` DSL. This repo
 does exactly that in `native/socket_ext/socket_ext.c` (bound by
-`source/socket_shim.rb`), so use it as the reference.
+`source/lib/socket_shim.rb`), so use it as the reference.
 
 ### The mechanism
 
@@ -666,7 +666,7 @@ These files are important to Spinel but should not shape example APIs:
 
 ## Rule of Thumb for New Examples
 
-- Socket server examples: use `socket_shim.rb` and Ruby-shaped
+- Socket server examples: use `lib/socket_shim.rb` and Ruby-shaped
   `TCPServer` / `TCPSocket` calls.
 - Process, polling, shell capture: add focused methods to a small native-backed
   compatibility layer when an example needs them.

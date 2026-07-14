@@ -4,7 +4,7 @@
 # Live bind/accept coverage belongs in a separate smoke test because sandboxed
 # environments may block bind(2).
 
-require_relative "../source/socket_shim"
+require_relative "../source/lib/socket_shim"
 
 def check(label, value)
   if value

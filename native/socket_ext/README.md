@@ -13,7 +13,7 @@ link input:
 ```
 
 The Ruby side declares these helpers with `ffi_func` in
-`source/socket_shim.rb`. Symbols use the `sx_` prefix so it is clear they are
+`source/lib/socket_shim.rb`. Symbols use the `sx_` prefix so it is clear they are
 project-local socket extension functions, not Spinel runtime functions.
 
 The extension returns simple FFI-friendly values: integers for file descriptors

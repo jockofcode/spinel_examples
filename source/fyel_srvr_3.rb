@@ -1,13 +1,13 @@
-# simple_server_3.rb, request parsing and a few hard-coded routes.
+# fyel_srvr_3.rb, request parsing and a few hard-coded routes.
 #
 # Step 3 of the FyelSrvr progression: parses the HTTP request line to extract
 # the method and path, then dispatches a small if/elsif routing table that
 # serves HTML pages and a JSON endpoint. Networking is the socket_shim
 # TCPServer; the content type is chosen from the path prefix.
 #
-# Compile: spinel source/simple_server_3.rb -o bin/simple_server_3
-# Run:     ./bin/simple_server_3   (listens on 8080; try / , /about , /api/status)
-require_relative "socket_shim"
+# Compile: spinel source/fyel_srvr_3.rb -o bin/fyel_srvr_3
+# Run:     ./bin/fyel_srvr_3   (listens on 8080; try / , /about , /api/status)
+require_relative "lib/socket_shim"
 
 # Read one request, route on its path, and write the response. The socket is
 # closed via ensure whether or not routing succeeds.

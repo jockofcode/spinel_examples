@@ -3,12 +3,12 @@
 
 # Stray binaries built at the repo root (e.g. `spinel ... -o fyel_srvr`).
 /fyel_srvr
-/simple_server_1
-/simple_server_2
-/simple_server_3
-/simple_server_4
-/simple_server_5
-/simple_server_6
+/fyel_srvr_1
+/fyel_srvr_2
+/fyel_srvr_3
+/fyel_srvr_4
+/fyel_srvr_5
+/fyel_srvr_6
 /todo_cli
 /log_report
 /token_api

@@ -2,7 +2,7 @@
 #
 # Deterministic value behavior test: run with both CRuby and Spinel and compare stdout.
 
-require_relative "../source/socket_shim"
+require_relative "../source/lib/socket_shim"
 
 def check(label, value)
   if value

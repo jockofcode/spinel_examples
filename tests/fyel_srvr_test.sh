@@ -13,7 +13,7 @@
 cd "$(dirname "$0")/.."
 
 BIN="./bin/fyel_srvr"
-SRC="source/simple_server_6.rb"
+SRC="source/fyel_srvr_6.rb"
 FAILED=0
 SRV_PID=""
 

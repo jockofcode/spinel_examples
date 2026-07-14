@@ -1,12 +1,12 @@
-# simple_server_2.rb, a minimal HTTP "Hello World" over the socket shim.
+# fyel_srvr_2.rb, a minimal HTTP "Hello World" over the socket shim.
 #
-# Step 2 of the FyelSrvr progression: the same idea as simple_server_1.rb but
-# using the Ruby-shaped TCPServer from socket_shim.rb instead of raw sockets.
+# Step 2 of the FyelSrvr progression: the same idea as fyel_srvr_1.rb but
+# using the Ruby-shaped TCPServer from lib/socket_shim.rb instead of raw sockets.
 # It writes one fixed HTTP response to every connection, then closes it.
 #
-# Compile: spinel source/simple_server_2.rb -o bin/simple_server_2
-# Run:     ./bin/simple_server_2   (listens on 8080; open http://localhost:8080/)
-require_relative "socket_shim"
+# Compile: spinel source/fyel_srvr_2.rb -o bin/fyel_srvr_2
+# Run:     ./bin/fyel_srvr_2   (listens on 8080; open http://localhost:8080/)
+require_relative "lib/socket_shim"
 
 # Write a single hard-coded HTML response and close the connection. The ensure
 # guarantees the socket is closed even if the write raises.

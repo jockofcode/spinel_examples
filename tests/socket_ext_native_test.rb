@@ -5,7 +5,7 @@
 #
 #   ~/Projects/spinel/spinel -E --link native/socket_ext/socket_ext.c tests/socket_ext_native_test.rb
 
-require_relative "../source/socket_shim"
+require_relative "../source/lib/socket_shim"
 
 def check(label, value)
   if value

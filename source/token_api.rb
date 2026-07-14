@@ -1,7 +1,7 @@
 # token_api.rb, a tiny JSON REST API with HMAC-signed bearer tokens.
 #
 # Real backend patterns with no framework, compiled to one binary: a hand-rolled
-# accept loop over socket_shim.rb, JSON request/response bodies, and
+# accept loop over lib/socket_shim.rb, JSON request/response bodies, and
 # authentication tokens signed with HMAC-SHA256. The signing goes through
 # Spinel's sp_crypto runtime via a small FFI module; under CRuby the same file
 # falls back to OpenSSL so it runs unmodified with `ruby`.
@@ -12,7 +12,7 @@
 #   TOKEN=$(curl -s -XPOST localhost:8124/login -d '{"user":"matz"}' | ...)
 #   curl -H "Authorization: Bearer $TOKEN" localhost:8124/notes
 #
-require_relative "socket_shim"
+require_relative "lib/socket_shim"
 require "json"
 
 # SECRET signs every token. In production this would be injected from the
@@ -230,7 +230,7 @@ def handle_client(client)
   end
 end
 
-# Parse -p PORT with a manual ARGV loop, matching simple_server_6.rb's
+# Parse -p PORT with a manual ARGV loop, matching fyel_srvr_6.rb's
 # dependency-free style. port stays an Integer throughout (we assign the
 # parsed value via .to_i) so codegen keeps a stable numeric type.
 port = 8080

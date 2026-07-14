@@ -147,7 +147,7 @@ end
 
 # --- CLI ------------------------------------------------------------------
 
-# Manual ARGV loop (same dependency-free style as simple_server_6.rb): the
+# Manual ARGV loop (same dependency-free style as fyel_srvr_6.rb): the
 # first non-flag argument is the directory, -w N sets the worker count.
 dir = "."
 workers = 4

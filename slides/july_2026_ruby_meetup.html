@@ -137,7 +137,7 @@ spinel works</code></pre>
   <span class="tag">App 1 / 5</span>
   <h1>FyelSrvr</h1>
   <h2>A static file server, no framework</h2>
-  <pre><code>$ spinel source/simple_server_6.rb -o bin/fyel_srvr
+  <pre><code>$ spinel source/fyel_srvr_6.rb -o bin/fyel_srvr
 $ ./bin/fyel_srvr -p 8080
 # directory listings, content types, index.html, 404s</code></pre>
   <p class="sub">Sockets, HTTP, path safety, in one compiled file.</p>
@@ -145,8 +145,8 @@ $ ./bin/fyel_srvr -p 8080
 
 <section class="slide">
   <h3>Technique &middot; one Ruby surface, two runtimes</h3>
-  <h2>socket_shim.rb</h2>
-  <pre><code><span class="c"># socket_shim.rb</span>
+  <h2>lib/socket_shim.rb</h2>
+  <pre><code><span class="c"># lib/socket_shim.rb</span>
 if defined?(RUBY_ENGINE)
   require "socket"          <span class="c"># CRuby: the real TCPServer</span>
 end
@@ -518,7 +518,7 @@ ALL GREEN</code></pre>
   <h3>Run them yourself &middot; 1 of 2</h3>
   <h2>Each block copies on its own</h2>
   <p class="tag">FyelSrvr &middot; static file server</p>
-  <pre><code>$ spinel source/simple_server_6.rb -o bin/fyel_srvr
+  <pre><code>$ spinel source/fyel_srvr_6.rb -o bin/fyel_srvr
 $ ./bin/fyel_srvr -p 8080        <span class="c"># open :8080</span></code></pre>
   <p class="tag">todo_cli &middot; note the require gate</p>
   <pre><code>$ SPINEL_REQUIRE_GATE=1 spinel source/todo_cli.rb -o bin/todo_cli

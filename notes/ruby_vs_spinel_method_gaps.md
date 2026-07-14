@@ -3,6 +3,17 @@
 This note compares Ruby 3.4 documentation against the local Spinel checkout at
 `/Users/branden/Projects/spinel`.
 
+> **Re-verified against Spinel `9127c7f1`.** Several gaps recorded during the
+> original development (baseline `0c2ce875`) have since been closed. Re-probing
+> the current compiler shows the following are **now supported**:
+> `Array#transpose`, `Array#repeated_permutation`, `chunk`, `chunk_while`,
+> `slice_when`, `grep_v`, `tally`, `to_set`, arrays as hash keys / `Array#hash`,
+> and `Integer#**` with a negative exponent (returns a `Rational`). These
+> sections are updated below. The poly-string dispatch gap, `optparse`
+> value-capture gap, reflection gaps, and the unavailable requires (`date`,
+> `securerandom`, `net/*`, `socket`, `Time.parse`) were re-probed and **still
+> hold**.
+
 Sources used:
 
 - Ruby 3.4 `String`: https://docs.ruby-lang.org/en/3.4/String.html
@@ -181,7 +192,7 @@ methods, but not all.
 |---|---|
 | Encoding/transcoding | `encode`, `encode!`, `encoding`, `force_encoding`, non-UTF-8 conversion tables |
 | Unicode normalization | `unicode_normalize`, `unicode_normalize!`, `unicode_normalized?` |
-| Grapheme clusters | `each_grapheme_cluster`, `grapheme_clusters` |
+| Grapheme clusters | `grapheme_clusters` / `each_grapheme_cluster` no longer raise, but they split by **codepoint**, not by extended grapheme cluster: `("a" + [0x301].pack("U")).grapheme_clusters.length` returns `2` (CRuby: `1`). Spinel deliberately does not carry the Unicode grapheme-break tables (`docs/limitations.md`), so treat these as unsafe for real grapheme work. |
 | Shellwords helpers | `shellescape`, `shellsplit` |
 | Ruby conversion hooks | `String.try_convert`, some `to_str` coercion cases |
 | Binary-safe text transforms | Embedded-NUL strings are byte-exact for core storage, but many transforms/searches still stop at the C NUL |
@@ -230,6 +241,13 @@ in a small standalone probe but fails inside the full program, because
 whole-program inference degrades the variable's static type. `value.dup`
 materializes a runtime `String` but does **not** restore the missing methods.
 
+**Re-verified on `9127c7f1` and still holds.** A standalone probe of the exact
+pattern (`grab(line).split(".")` across methods) now *appears* to work, which is
+the false-positive the paragraph above warns about. Rebuilding `token_api.rb`
+with `verify_token` switched to `token.split(".")` still **compiles** but the
+authenticated request fails at runtime (the `/notes` call returns no response
+instead of `200`). The single-index character-loop workaround remains required.
+
 Workaround used in `token_api.rb`: parse the poly string with a manual
 character loop that relies only on `#length`, single-index `#[]`, `==`, and
 concatenation -- e.g. to split `"user.signature"` on the first `.`, walk the
@@ -241,27 +259,38 @@ methods.
 ## Array and Enumerable Gaps
 
 Ruby's `Array` docs include many methods inherited from or related to
-`Enumerable`. Spinel supports a healthy subset, but gaps remain around some
-enumerator-returning combinatorics and general Enumerable behavior.
+`Enumerable`. Spinel supports a healthy subset. As of `9127c7f1` most of the
+enumerator-returning and shape helpers that were previously gaps now work.
 
 ### Not Available or Limited
 
 | Ruby method group | Examples |
 |---|---|
-| Enumerator-returning combinatorics | `repeated_permutation(...).to_a` is currently unsupported in a probe |
-| Some matrix/shape helpers | `transpose` is currently unsupported |
 | General external Enumerator from arbitrary user methods | Mostly limited to known cases such as `Array#each`, `Range#each`, and `Enumerator.new` |
-| Full Enumerable set | `chunk`, `chunk_while`, `slice_when`, `grep_v`, `tally`, `to_set`, broad `lazy` chains may be missing or partial |
-| Hashability of arrays | `Array#hash` and arrays as hash keys are documented as unsupported in Spinel limitations |
+| Broad lazy chains | Long `.lazy...` pipelines may still be partial; verify the exact chain |
 
-Probe examples:
+### Now Supported (were gaps at baseline `0c2ce875`, re-probed on `9127c7f1`)
+
+Each of these was confirmed with a `spinel -E -e` probe against the current
+compiler:
 
 ```sh
-./spinel -E -e 'p [1,2,3].transpose'
-# unsupported call: CallNode `transpose`
+./spinel -E -e 'p [[1,2],[3,4]].transpose'            # => [[1, 3], [2, 4]]
+./spinel -E -e 'p [1,2].repeated_permutation(2).to_a' # => [[1,1],[1,2],[2,1],[2,2]]
+./spinel -E -e 'p [1,1,2,3,3].chunk_while { |a,b| a==b }.to_a'  # => [[1,1],[2],[3,3]]
+./spinel -E -e 'p [1,2,2,3].tally'                    # => {1=>1, 2=>2, 3=>1}
+./spinel -E -e 'p [1,2,4,9].slice_when { |a,b| b-a>1 }.to_a'    # => [[1,2],[4],[9]]
+./spinel -E -e 'p ["a","b","c"].grep_v(/a/)'          # => ["b", "c"]
+SPINEL_REQUIRE_GATE=1 ./spinel -E -e 'require "set"; p [1,2,3,3].to_set.size'  # => 3
+```
 
-./spinel -E -e 'p [1,2,3].repeated_permutation(2).to_a'
-# unsupported p argument: CallNode `to_a` on the returned value
+Arrays as hash keys / `Array#hash` also work now, even though
+`docs/limitations.md` still lists them as unsupported (the compiler is ahead of
+that doc line):
+
+```sh
+./spinel -E -e 'h=Hash.new(0); h[[1,2]]+=1; h[[1,2]]+=1; p h[[1,2]]'  # => 2
+./spinel -E -e 'p [1,2].hash == [1,2].hash'                            # => true
 ```
 
 ### Confirmed Available in Probes
@@ -424,7 +453,7 @@ when configured, but Ruby's exact numeric tower is richer.
 
 | Ruby method/behavior | Spinel status |
 |---|---|
-| `Integer#**` with negative exponent | Raises `RangeError`; CRuby returns a `Rational` |
+| `Integer#**` with negative exponent | **Now supported** on `9127c7f1` (was `RangeError` at baseline): `2 ** -1 # => (1/2)`, matching CRuby, for both literal and runtime bases. `0 ** -1` still raises `ZeroDivisionError` as in CRuby. |
 | Bigint-backed `Rational` precision | Spinel `Rational` uses fixed integer numerator/denominator and can overflow |
 | Exact `Complex` component preservation | Spinel stores complex components as floats |
 | `Integer#chr` with runtime/non-constant or unsupported encoding | Documented as unsupported in compiler source |

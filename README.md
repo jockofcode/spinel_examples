@@ -56,7 +56,8 @@ With `asdf`:
 
 ```bash
 asdf plugin add spinel https://github.com/jockofcode/asdf-spinel
-asdf install
+asdf install spinel latest
+asdf set -u spinel latest   # make it the default (~/.tool-versions)
 ```
 
 Or build it from source:

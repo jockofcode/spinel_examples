@@ -212,7 +212,7 @@ const char *my_bytes(...) {
 ```
 
 Same static-buffer caveat as the runtime helpers: the next FFI call may reuse
-the buffer, so copy the result (`"" + value`) if you need to keep it, and it is
+the buffer, so copy the result (`value.dup`) if you need to keep it, and it is
 not thread-safe -- guard with a `Mutex` under real parallelism.
 
 ### Manual `cc` path (when you need full control)

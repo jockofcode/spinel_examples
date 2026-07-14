@@ -35,7 +35,7 @@ require "digest"
 def first_chars(str, n)
   out = ""
   char_index = 0
-  str_copy = "" + str
+  str_copy = str.dup
   while char_index < n && char_index < str_copy.length
     out = out + str_copy[char_index]
     char_index += 1
@@ -47,7 +47,7 @@ end
 # (same poly-string reason as first_chars: #split / #index / range slices are
 # unreliable on these values, but [] and concatenation are not).
 def split_tab(line)
-  str_copy = "" + line
+  str_copy = line.dup
   length = str_copy.length
   left = ""
   right = ""

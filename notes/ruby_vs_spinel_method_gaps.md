@@ -220,14 +220,14 @@ helper, then passed to another helper) raised `undefined method 'index'` /
 Confirmed on such a poly string:
 
 - Works: `#length`, single-index `#[]` (e.g. `token[char_index]`), `==`,
-  `#start_with?`, string concatenation (`user + char`, `"" + token`).
+  `#start_with?`, string concatenation (`user + char`), and `#dup`.
 - Fails at runtime: `#index`, `#split`, and range/`begin...end` slicing
   (`token[0...n]`, `token[char_index..-1]` returned a single character instead
   of a substring).
 
 The failure is context-dependent: the same helper compiles and runs correctly
 in a small standalone probe but fails inside the full program, because
-whole-program inference degrades the variable's static type. `"" + value`
+whole-program inference degrades the variable's static type. `value.dup`
 materializes a runtime `String` but does **not** restore the missing methods.
 
 Workaround used in `token_api.rb`: parse the poly string with a manual

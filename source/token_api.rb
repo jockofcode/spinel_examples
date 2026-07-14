@@ -49,14 +49,14 @@ else
 
   module Crypto
     # IMPORTANT: sp_crypto_* return static C buffers that the next crypto call
-    # overwrites. We copy each result into a fresh Ruby string ("" + value) so a
+    # overwrites. We copy each result into a fresh Ruby string (#dup) so a
     # held value survives a later call. Cheap insurance; costs one allocation.
     def self.hmac_b64url(key, msg)
-      "" + SpinelToken.sp_crypto_hmac_sha256_b64url(key, msg)
+      SpinelToken.sp_crypto_hmac_sha256_b64url(key, msg).dup
     end
 
     def self.random_b64url(n)
-      "" + SpinelToken.sp_crypto_random_b64url(n)
+      SpinelToken.sp_crypto_random_b64url(n).dup
     end
   end
 end
@@ -81,7 +81,7 @@ def verify_token(token)
   # so we walk it one character at a time: everything before the first "." is
   # the user, everything after is the signature. Building the two parts by
   # char-concatenation keeps us on the operations that dispatch reliably.
-  token = "" + token
+  token = token.dup
   length = token.length
   user = ""
   sig = ""
@@ -195,7 +195,7 @@ def handle_client(client)
     # recv returns a :binstr; normalize to a concrete String up front so every
     # value we slice out of it downstream (paths, header lines, the token)
     # dispatches String methods reliably.
-    raw = "" + raw
+    raw = raw.dup
 
     # Headers and body are separated by a blank line (CRLFCRLF).
     split_at = raw.index("\r\n\r\n")

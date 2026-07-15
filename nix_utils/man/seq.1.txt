@@ -1,0 +1,147 @@
+SEQ(1)                        User Commands                        SEQ(1)
+
+NAME          top
+       seq - print a sequence of numbers
+
+SYNOPSIS          top
+       seq [OPTION]... LAST
+       seq [OPTION]... FIRST LAST
+       seq [OPTION]... FIRST INCREMENT LAST
+
+DESCRIPTION          top
+       Print numbers from FIRST to LAST, in steps of INCREMENT.
+
+       Mandatory arguments to long options are mandatory for short
+       options too.
+
+       -f, --format=FORMAT
+              use printf style floating-point FORMAT
+
+       -s, --separator=STRING
+              use STRING to separate numbers (default: \n)
+
+       -w, --equal-width
+              equalize width by padding with leading zeroes
+
+       --help display this help and exit
+
+       --version
+              output version information and exit
+
+       If FIRST or INCREMENT is omitted, it defaults to 1.  That is, an
+       omitted INCREMENT defaults to 1 even when LAST is smaller than
+       FIRST.  The sequence of numbers ends when the sum of the current
+       number and INCREMENT would become greater than LAST.  FIRST,
+       INCREMENT, and LAST are interpreted as floating point values.
+       INCREMENT is usually positive if FIRST is smaller than LAST, and
+       INCREMENT is usually negative if FIRST is greater than LAST.
+       INCREMENT must not be 0; none of FIRST, INCREMENT and LAST may be
+       NaN.  FORMAT must be suitable for printing one argument of type
+       'double'; it defaults to %.PRECf if FIRST, INCREMENT, and LAST are
+       all fixed point decimal numbers with maximum precision PREC, and
+       to %g otherwise.
+
+AUTHOR          top
+       Written by Ulrich Drepper.
+
+REPORTING BUGS          top
+       Report bugs to: bug-coreutils@gnu.org
+       GNU coreutils home page: https://www.gnu.org/software/coreutils/>
+       General help using GNU software: https://www.gnu.org/gethelp/>
+       Report any translation bugs to
+       https://translationproject.org/team/>
+
+COPYRIGHT          top
+       Copyright © 2026 Free Software Foundation, Inc.  License GPLv3+:
+       GNU GPL version 3 or later https://gnu.org/licenses/gpl.html>.
+       This is free software: you are free to change and redistribute it.
+       There is NO WARRANTY, to the extent permitted by law.
+
+SEE ALSO          top
+       Full documentation https://www.gnu.org/software/coreutils/seq>
+       or available locally via: info '(coreutils) seq invocation'
+
+COLOPHON          top
+       This page is part of the coreutils (basic file, shell and text
+       manipulation utilities) project.  Information about the project
+       can be found at ⟨http://www.gnu.org/software/coreutils/⟩.  If you
+       have a bug report for this manual page, see
+       ⟨http://www.gnu.org/software/coreutils/⟩.  This page was obtained
+       from the tarball coreutils-9.11.tar.xz fetched from
+       ⟨http://ftp.gnu.org/gnu/coreutils/⟩ on 2026-05-24.  If you
+       discover any rendering problems in this HTML version of the page,
+       or you believe there is a better or more up-to-date source for the
+       page, or you have corrections or improvements to the information
+       in this COLOPHON (which is not part of the original manual page),
+       send a mail to man-pages@man7.org
+
+GNU coreutils 9.11              April 2026                         SEQ(1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+            HTML rendering created 2026-05-30
+            by Michael Kerrisk,
+            author of
+            The Linux Programming Interface.
+
+
+            For details of in-depth
+            Linux/UNIX system programming training courses
+            that I teach, look here.
+
+
+            Hosting by jambit GmbH.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+var sc_project=7422636;
+var sc_invisible=1;
+var sc_security="9b6714ff";
+
+
+
+
+
+
+
+
+
+
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-9830363-8']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();

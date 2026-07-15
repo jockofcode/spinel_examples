@@ -1,0 +1,125 @@
+FALSE(1)                      User Commands                      FALSE(1)
+
+NAME          top
+       false - do nothing, unsuccessfully
+
+SYNOPSIS          top
+       false [ignored command line arguments]
+       false OPTION
+
+DESCRIPTION          top
+       Exit with a status code indicating failure.
+
+       --help display this help and exit
+
+       --version
+              output version information and exit
+
+       Your shell may have its own version of false, which usually
+       supersedes the version described here.  Please refer to your
+       shell's documentation for details about the options it supports.
+
+AUTHOR          top
+       Written by Jim Meyering.
+
+REPORTING BUGS          top
+       Report bugs to: bug-coreutils@gnu.org
+       GNU coreutils home page: https://www.gnu.org/software/coreutils/>
+       General help using GNU software: https://www.gnu.org/gethelp/>
+       Report any translation bugs to
+       https://translationproject.org/team/>
+
+COPYRIGHT          top
+       Copyright © 2026 Free Software Foundation, Inc.  License GPLv3+:
+       GNU GPL version 3 or later https://gnu.org/licenses/gpl.html>.
+       This is free software: you are free to change and redistribute it.
+       There is NO WARRANTY, to the extent permitted by law.
+
+SEE ALSO          top
+       Full documentation https://www.gnu.org/software/coreutils/false>
+       or available locally via: info '(coreutils) false invocation'
+
+COLOPHON          top
+       This page is part of the coreutils (basic file, shell and text
+       manipulation utilities) project.  Information about the project
+       can be found at ⟨http://www.gnu.org/software/coreutils/⟩.  If you
+       have a bug report for this manual page, see
+       ⟨http://www.gnu.org/software/coreutils/⟩.  This page was obtained
+       from the tarball coreutils-9.11.tar.xz fetched from
+       ⟨http://ftp.gnu.org/gnu/coreutils/⟩ on 2026-05-24.  If you
+       discover any rendering problems in this HTML version of the page,
+       or you believe there is a better or more up-to-date source for the
+       page, or you have corrections or improvements to the information
+       in this COLOPHON (which is not part of the original manual page),
+       send a mail to man-pages@man7.org
+
+GNU coreutils 9.11              April 2026                       FALSE(1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+            HTML rendering created 2026-05-30
+            by Michael Kerrisk,
+            author of
+            The Linux Programming Interface.
+
+
+            For details of in-depth
+            Linux/UNIX system programming training courses
+            that I teach, look here.
+
+
+            Hosting by jambit GmbH.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+var sc_project=7422636;
+var sc_invisible=1;
+var sc_security="9b6714ff";
+
+
+
+
+
+
+
+
+
+
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-9830363-8']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();

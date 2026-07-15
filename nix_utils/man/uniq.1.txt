@@ -1,0 +1,176 @@
+UNIQ(1)                       User Commands                       UNIQ(1)
+
+NAME          top
+       uniq - report or omit repeated lines
+
+SYNOPSIS          top
+       uniq [OPTION]... [INPUT [OUTPUT]]
+
+DESCRIPTION          top
+       Filter adjacent matching lines from INPUT (or standard input),
+       writing to OUTPUT (or standard output).
+
+       With no options, matching lines are merged to the first
+       occurrence.
+
+       Mandatory arguments to long options are mandatory for short
+       options too.
+
+       -c, --count
+              prefix lines by the number of occurrences
+
+       -d, --repeated
+              only print duplicate lines, one for each group
+
+       -D     print all duplicate lines
+
+       --all-repeated[=METHOD]
+              like -D, but allow separating groups with an empty line;
+              METHOD={none(default),prepend,separate}
+
+       -f, --skip-fields=N
+              avoid comparing the first N fields
+
+       --group[=METHOD]
+              show all items, separating groups with an empty line;
+              METHOD={separate(default),prepend,append,both}
+
+       -i, --ignore-case
+              ignore differences in case when comparing
+
+       -s, --skip-chars=N
+              avoid comparing the first N characters
+
+       -u, --unique
+              only print unique lines
+
+       -z, --zero-terminated
+              line delimiter is NUL, not newline
+
+       -w, --check-chars=N
+              compare no more than N characters in lines
+
+       --help display this help and exit
+
+       --version
+              output version information and exit
+
+       A field is a run of blanks (usually spaces and/or TABs), then
+       non-blank characters.  Fields are skipped before chars.
+
+       'uniq' does not detect repeated lines unless they are adjacent.
+       You may want to sort the input first, or use 'sort -u' without
+       'uniq'.
+
+AUTHOR          top
+       Written by Richard M. Stallman and David MacKenzie.
+
+REPORTING BUGS          top
+       Report bugs to: bug-coreutils@gnu.org
+       GNU coreutils home page: https://www.gnu.org/software/coreutils/>
+       General help using GNU software: https://www.gnu.org/gethelp/>
+       Report any translation bugs to
+       https://translationproject.org/team/>
+
+COPYRIGHT          top
+       Copyright © 2026 Free Software Foundation, Inc.  License GPLv3+:
+       GNU GPL version 3 or later https://gnu.org/licenses/gpl.html>.
+       This is free software: you are free to change and redistribute it.
+       There is NO WARRANTY, to the extent permitted by law.
+
+SEE ALSO          top
+       comm(1), join(1), sort(1)
+
+       Full documentation https://www.gnu.org/software/coreutils/uniq>
+       or available locally via: info '(coreutils) uniq invocation'
+
+COLOPHON          top
+       This page is part of the coreutils (basic file, shell and text
+       manipulation utilities) project.  Information about the project
+       can be found at ⟨http://www.gnu.org/software/coreutils/⟩.  If you
+       have a bug report for this manual page, see
+       ⟨http://www.gnu.org/software/coreutils/⟩.  This page was obtained
+       from the tarball coreutils-9.11.tar.xz fetched from
+       ⟨http://ftp.gnu.org/gnu/coreutils/⟩ on 2026-05-24.  If you
+       discover any rendering problems in this HTML version of the page,
+       or you believe there is a better or more up-to-date source for the
+       page, or you have corrections or improvements to the information
+       in this COLOPHON (which is not part of the original manual page),
+       send a mail to man-pages@man7.org
+
+GNU coreutils 9.11              April 2026                        UNIQ(1)
+
+
+
+Pages that refer to this page:
+    comm(1),
+    join(1),
+    sort(1)
+
+
+
+
+
+
+
+
+
+
+
+
+            HTML rendering created 2026-05-30
+            by Michael Kerrisk,
+            author of
+            The Linux Programming Interface.
+
+
+            For details of in-depth
+            Linux/UNIX system programming training courses
+            that I teach, look here.
+
+
+            Hosting by jambit GmbH.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+var sc_project=7422636;
+var sc_invisible=1;
+var sc_security="9b6714ff";
+
+
+
+
+
+
+
+
+
+
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-9830363-8']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();

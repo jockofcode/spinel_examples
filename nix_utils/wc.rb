@@ -9,10 +9,10 @@
 #   -l, --lines             newline counts
 #   -w, --words             word counts (whitespace-delimited)
 #   -m, --chars             character counts
-#   -c, --bytes             byte counts
+#   -c, --count_bytes             byte counts
 #   -L, --max-line-length   length of the longest line
 #   --help                  usage
-# With no count flag, wc prints lines, words, and bytes (the GNU default).
+# With no count flag, wc prints lines, words, and count_bytes (the GNU default).
 #
 # Compile: spinel nix_utils/wc.rb -o nix_utils/bin/wc
 # Run:
@@ -27,37 +27,37 @@ USAGE = "Usage: wc [OPTION]... [FILE]...\n" \
         "  or:  wc [OPTION]... --files0-from=F\n" \
         "Print newline, word, and byte counts for each FILE.\n" \
         "With no FILE, or when FILE is -, read standard input.\n" \
-        "  -l  lines   -w  words   -m  chars   -c  bytes\n" \
+        "  -l  lines   -w  words   -m  chars   -c  count_bytes\n" \
         "  -L  max line length\n" \
         "  --files0-from=F  read NUL-delimited filenames from F\n" \
         "  --total=WHEN     auto (default), always, only, never\n" \
         "  --help"
 
 # Which counts the user asked for. When nothing is selected we fall back to the
-# GNU default of lines, words, and bytes at print time.
+# GNU default of lines, words, and count_bytes at print time.
 class WcSelection
-  attr_accessor :lines, :words, :chars, :bytes, :max_length
+  attr_accessor :lines, :words, :chars, :count_bytes, :max_length
   def initialize
     @lines = false
     @words = false
     @chars = false
-    @bytes = false
+    @count_bytes = false
     @max_length = false
   end
 
   def any?
-    @lines || @words || @chars || @bytes || @max_length
+    @lines || @words || @chars || @count_bytes || @max_length
   end
 end
 
 # Compute all five counts for one blob of text in a single pass over its
-# lines. Returns [lines, words, chars, bytes, max_line_length].
+# lines. Returns [lines, words, chars, count_bytes, max_line_length].
 #
 # GNU semantics: "lines" counts newline characters, "words" are maximal runs
-# of non-whitespace, "chars" is character count, "bytes" is byte count, and
+# of non-whitespace, "chars" is character count, "count_bytes" is byte count, and
 # max-line-length is the longest line measured without its newline.
 def count_text(text)
-  bytes = text.bytesize
+  count_bytes = text.bytesize
   chars = text.length
   lines = 0
   words = 0
@@ -72,7 +72,7 @@ def count_text(text)
     words += body.split.length
   end
 
-  [lines, words, chars, bytes, max_length]
+  [lines, words, chars, count_bytes, max_length]
 end
 
 # Read one source fully. "-" is standard input.
@@ -82,7 +82,7 @@ def read_source(name)
   File.read(cname)
 end
 
-# Print one result row. counts is [lines, words, chars, bytes, max_length];
+# Print one result row. counts is [lines, words, chars, count_bytes, max_length];
 # label is the file name (or "" for the stdin case, matching GNU, which prints
 # no name for stdin). Only the selected columns are shown, each right-justified
 # in a width-7 field with a leading space between columns, as GNU does.
@@ -91,7 +91,7 @@ def print_row(counts, selection, label)
   fields.push(counts[0]) if selection.lines
   fields.push(counts[1]) if selection.words
   fields.push(counts[2]) if selection.chars
-  fields.push(counts[3]) if selection.bytes
+  fields.push(counts[3]) if selection.count_bytes
   fields.push(counts[4]) if selection.max_length
 
   parts = []
@@ -126,7 +126,7 @@ def parse_argv(argv)
     elsif arg == "--chars"
       selection.chars = true
     elsif arg == "--bytes"
-      selection.bytes = true
+      selection.count_bytes = true
     elsif arg == "--max-line-length"
       selection.max_length = true
     elsif arg.length > 14 && arg[0, 14] == "--files0-from="
@@ -155,7 +155,7 @@ def parse_argv(argv)
         elsif letter == "m"
           selection.chars = true
         elsif letter == "c"
-          selection.bytes = true
+          selection.count_bytes = true
         elsif letter == "L"
           selection.max_length = true
         else
@@ -174,21 +174,23 @@ end
 selection, files, files0_from, total_when = parse_argv(ARGV)
 
 # --files0-from=F: append NUL-separated filenames from F to the file list.
+# NUL bytes can't be embedded in C strings, so we convert them to newlines
+# with tr(1) and split on newline instead.
 unless files0_from.nil?
   ff = "" + files0_from
-  content = ff == "-" ? STDIN.read : File.read(ff)
-  content.split("\0").each do |seg|
-    unless seg == ""
-      files.push("" + seg)
-    end
+  src = ff == "-" ? "/dev/stdin" : ff
+  content = "" + `/usr/bin/tr '\\000' '\\012' < #{src}`
+  content.split("\n").each do |seg|
+    cseg = "" + seg
+    files.push(cseg) unless cseg == ""
   end
 end
 
-# Default selection: lines, words, bytes.
+# Default selection: lines, words, count_bytes.
 unless selection.any?
   selection.lines = true
   selection.words = true
-  selection.bytes = true
+  selection.count_bytes = true
 end
 
 reading_stdin = files.empty?

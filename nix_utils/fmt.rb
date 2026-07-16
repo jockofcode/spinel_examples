@@ -203,12 +203,14 @@ def flush_para(para, opts)
     format_paragraph(para, opts).each { |l| puts l }
   end
   empty = []
+  empty.push(""); empty.pop
   empty
 end
 
 def process(content, opts)
   lines = content.lines
   para = []
+  para.push(""); para.pop
   in_para = false
 
   lines.each do |raw|

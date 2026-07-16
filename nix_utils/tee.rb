@@ -54,16 +54,14 @@ ARGV.each do |arg|
   end
 end
 
+content = "" + STDIN.read
+STDOUT.write(content)
+
 mode = append ? "a" : "w"
-out_files = []
 exit_code = 0
 file_names.each do |name|
-  out_files.push(File.open(name, mode))
-end
-
-content = STDIN.read
-STDOUT.write(content)
-out_files.each do |f|
+  cname = "" + name
+  f = File.open(cname, mode)
   f.write(content)
   f.close
 end

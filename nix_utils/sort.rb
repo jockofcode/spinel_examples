@@ -42,28 +42,28 @@ USAGE = "Usage: sort [OPTION]... [FILE]...\n" \
         "  --help"
 
 class SortKey
-  attr_accessor :field, :char_offset, :numeric, :reverse, :fold_case, :ignore_blanks
+  attr_accessor :field, :char_offset, :numeric, :key_reverse, :fold_case, :ignore_blanks
   def initialize
     @field         = 0
     @char_offset   = 0
     @numeric       = false
-    @reverse       = false
+    @key_reverse   = false
     @fold_case     = false
     @ignore_blanks = false
   end
 end
 
 class SortOptions
-  attr_accessor :keys, :separator, :reverse, :numeric, :general_numeric
+  attr_accessor :sort_keys, :separator, :sort_reverse, :numeric, :general_numeric
   attr_accessor :fold_case, :unique, :ignore_blanks
   attr_accessor :human, :month, :version, :random, :dictionary, :ignore_nonprint
   attr_accessor :output, :zero, :check
   def initialize
-    @keys            = []
-    @keys.push(SortKey.new)
-    @keys.pop
+    @sort_keys       = []
+    @sort_keys.push(SortKey.new)
+    @sort_keys.pop
     @separator       = nil
-    @reverse         = false
+    @sort_reverse    = false
     @numeric         = false
     @general_numeric = false
     @fold_case       = false
@@ -114,7 +114,7 @@ def parse_keydef(spec)
   while k < rest.length
     c = rest[k]
     if c == "n" || c == "g"; key.numeric       = true
-    elsif c == "r";           key.reverse       = true
+    elsif c == "r";           key.key_reverse   = true
     elsif c == "f";           key.fold_case     = true
     elsif c == "b";           key.ignore_blanks = true
     end
@@ -138,7 +138,7 @@ def parse_argv(argv)
     elsif arg == "--help"
       puts USAGE; exit 0
     elsif arg == "-r" || arg == "--reverse"
-      opts.reverse = true
+      opts.sort_reverse = true
     elsif arg == "-n" || arg == "--numeric-sort"
       opts.numeric = true
     elsif arg == "-g" || arg == "--general-numeric-sort"
@@ -196,11 +196,11 @@ def parse_argv(argv)
       opts.separator = arg[18, arg.length - 18]
     elsif arg == "-k" || arg == "--key"
       index += 1
-      opts.keys.push(parse_keydef(argv[index]))
+      opts.sort_keys.push(parse_keydef(argv[index]))
     elsif arg.length > 2 && arg[0, 2] == "-k"
-      opts.keys.push(parse_keydef(arg[2, arg.length - 2]))
+      opts.sort_keys.push(parse_keydef(arg[2, arg.length - 2]))
     elsif arg.length > 6 && arg[0, 6] == "--key="
-      opts.keys.push(parse_keydef(arg[6, arg.length - 6]))
+      opts.sort_keys.push(parse_keydef(arg[6, arg.length - 6]))
     else
       # Multi-letter short flag run.
       letters = arg[1, arg.length - 1]
@@ -208,7 +208,7 @@ def parse_argv(argv)
       valid = true
       while li < letters.length
         c = letters[li]
-        if c == "r";         opts.reverse         = true
+        if c == "r";         opts.sort_reverse    = true
         elsif c == "n";      opts.numeric         = true
         elsif c == "g";      opts.general_numeric = true
         elsif c == "h";      opts.human           = true
@@ -276,10 +276,10 @@ def filter_chars(text, opts)
   while i < text.length
     c = text[i]
     if opts.dictionary
-      out += c if alnum_char?(c) || c == " " || c == "\t"
+      out = out + c if alnum_char?(c) || c == " " || c == "\t"
     else
       o = c.ord
-      out += c if o >= 32 && o <= 126
+      out = out + c if o >= 32 && o <= 126
     end
     i += 1
   end
@@ -333,11 +333,11 @@ def version_key(text)
         j += 1
       end
       run = text[i, j - i]
-      out += ("0" * (20 - run.length)) + run if run.length < 20
-      out += run if run.length >= 20
+      out = out + (("0" * (20 - run.length)) + run) if run.length < 20
+      out = out + run if run.length >= 20
       i = j
     else
-      out += c
+      out = out + c
       i += 1
     end
   end
@@ -345,12 +345,12 @@ def version_key(text)
 end
 
 def make_sort_value(body, opts)
-  if opts.keys.empty?
+  if opts.sort_keys.empty?
     text = body
     text = strip_leading_blanks(text) if opts.ignore_blanks
     fold = opts.fold_case
   else
-    key  = opts.keys[0]
+    key  = opts.sort_keys[0]
     text = extract_key_text(body, key, opts)
     fold = key.fold_case || opts.fold_case
   end
@@ -358,7 +358,7 @@ def make_sort_value(body, opts)
   text = filter_chars(text, opts)
   text = text.downcase if fold
 
-  key_numeric = !opts.keys.empty? && opts.keys[0].numeric
+  key_numeric = !opts.sort_keys.empty? && opts.sort_keys[0].numeric
   if opts.month
     [month_num(text), text]
   elsif opts.human
@@ -377,6 +377,7 @@ files = ["-"] if files.empty?
 
 delim = opts.zero ? "\0" : "\n"
 lines = []   # record bodies without their terminator
+lines.push(""); lines.pop
 exit_code = 0
 
 files.each do |name|
@@ -391,10 +392,10 @@ files.each do |name|
     exit_code = 1
     next
   end
-  content = read_source(cname)
+  content = "" + read_source(cname)
   records = content.split(delim, -1)
   records.pop if !records.empty? && records.last == ""
-  records.each { |r| lines.push(r) }
+  records.each { |r| lines.push("" + r) }
 end
 
 # -c / -C: check whether the input is already sorted and exit without sorting.
@@ -405,7 +406,7 @@ if opts.check
     a = make_sort_value(lines[n], opts)
     b = make_sort_value(lines[n + 1], opts)
     cmp = a <=> b
-    bad = opts.reverse ? cmp < 0 : cmp > 0
+    bad = opts.sort_reverse ? cmp < 0 : cmp > 0
     bad = true if opts.unique && cmp == 0
     if bad
       unless opts.check == "quiet"
@@ -420,7 +421,7 @@ if opts.check
 end
 
 sorted = lines.sort_by { |body| make_sort_value(body, opts) }
-sorted.reverse! if opts.reverse
+sorted.reverse! if opts.sort_reverse
 
 # -R: group identical keys but otherwise shuffle by a stable hash of the key.
 if opts.random

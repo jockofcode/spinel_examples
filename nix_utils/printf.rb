@@ -202,8 +202,12 @@ def format_fixed_f(n, prec)
   s = int_part.to_s
   if prec > 0
     # multiply frac by 10^prec and round
-    factor = 1
-    prec.times { factor *= 10 }
+    factor = 1.0
+    pi = 0
+    while pi < prec
+      factor *= 10.0
+      pi += 1
+    end
     frac_int = (frac * factor + 0.5).to_i
     if frac_int >= factor
       s = (int_part + 1).to_s

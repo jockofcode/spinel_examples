@@ -83,8 +83,15 @@ end
 def lookup_name_for_uid(uid)
   if File.exist?("/etc/passwd")
     File.read("/etc/passwd").lines.each do |line|
-      parts = line.chomp.split(":")
+      parts = ("" + line).chomp.split(":")
       return parts[0] if parts.length >= 3 && parts[2].to_i == uid
+    end
+  end
+  if File.exist?("/usr/bin/dscacheutil")
+    raw = "" + `/usr/bin/dscacheutil -q user -a uid #{uid} 2>/dev/null`
+    raw.lines.each do |line|
+      cline = "" + line.chomp
+      return cline[6, cline.length - 6] if cline.start_with?("name: ")
     end
   end
   uid.to_s
@@ -93,66 +100,126 @@ end
 def lookup_name_for_gid(gid)
   if File.exist?("/etc/group")
     File.read("/etc/group").lines.each do |line|
-      parts = line.chomp.split(":")
+      parts = ("" + line).chomp.split(":")
       return parts[0] if parts.length >= 3 && parts[2].to_i == gid
+    end
+  end
+  if File.exist?("/usr/bin/dscacheutil")
+    raw = "" + `/usr/bin/dscacheutil -q group -a gid #{gid} 2>/dev/null`
+    raw.lines.each do |line|
+      cline = "" + line.chomp
+      return cline[6, cline.length - 6] if cline.start_with?("name: ")
     end
   end
   gid.to_s
 end
 
+# Returns uid as int, or -1 if not found.
 def lookup_uid_for_name(name)
   if File.exist?("/etc/passwd")
     File.read("/etc/passwd").lines.each do |line|
-      parts = line.chomp.split(":")
+      parts = ("" + line).chomp.split(":")
       return parts[2].to_i if parts.length >= 3 && parts[0] == name
     end
   end
-  nil
+  if File.exist?("/usr/bin/dscacheutil")
+    raw = "" + `/usr/bin/dscacheutil -q user -a name #{name} 2>/dev/null`
+    raw.lines.each do |line|
+      cline = "" + line.chomp
+      return cline[5, cline.length - 5].to_i if cline.start_with?("uid: ")
+    end
+  end
+  -1
+end
+
+# Returns gid as int, or 0 if not found.
+def lookup_gid_for_name(name)
+  if File.exist?("/etc/passwd")
+    File.read("/etc/passwd").lines.each do |line|
+      parts = ("" + line).chomp.split(":")
+      return parts[3].to_i if parts.length >= 4 && parts[0] == name
+    end
+  end
+  if File.exist?("/usr/bin/dscacheutil")
+    raw = "" + `/usr/bin/dscacheutil -q user -a name #{name} 2>/dev/null`
+    raw.lines.each do |line|
+      cline = "" + line.chomp
+      return cline[5, cline.length - 5].to_i if cline.start_with?("gid: ")
+    end
+  end
+  0
+end
+
+# Returns an int array of all group IDs the user belongs to, starting with
+# the primary gid. Falls back to dscacheutil on macOS.
+def lookup_groups_for_user(name, primary_gid)
+  groups = []
+  groups.push(0); groups.pop
+  groups.push(primary_gid)
+  if File.exist?("/etc/group")
+    File.read("/etc/group").lines.each do |line|
+      cline = "" + line
+      parts = cline.chomp.split(":")
+      if parts.length >= 4
+        mstr = "" + parts[3]
+        mstr.split(",").each do |u|
+          if ("" + u) == name
+            gnum = parts[2].to_i
+            groups.push(gnum) unless groups.include?(gnum)
+          end
+        end
+      end
+    end
+  end
+  # Also query dscacheutil on macOS, since /etc/group lacks supplementary groups.
+  if File.exist?("/usr/bin/dscacheutil")
+    raw = "" + `/usr/bin/dscacheutil -q group 2>/dev/null`
+    cur_gid = -1
+    in_match = false
+    raw.lines.each do |line|
+      cline = "" + line.chomp
+      if cline == ""
+        if in_match && cur_gid >= 0
+          groups.push(cur_gid) unless groups.include?(cur_gid)
+        end
+        cur_gid = -1
+        in_match = false
+      elsif cline.start_with?("gid: ")
+        cur_gid = cline[5, cline.length - 5].to_i
+      elsif cline.start_with?("users: ")
+        ustr = cline[7, cline.length - 7]
+        ustr.split(" ").each do |u|
+          in_match = true if ("" + u) == name
+        end
+      end
+    end
+    if in_match && cur_gid >= 0
+      groups.push(cur_gid) unless groups.include?(cur_gid)
+    end
+  end
+  groups
 end
 
 opts, users = parse_argv(ARGV)
 
-target_user = users[0]
-
-# Resolve UIDs and GIDs
-if target_user
-  uid = lookup_uid_for_name(target_user)
-  if uid.nil?
-    STDERR.puts "id: '#{target_user}': no such user"
-    exit 1
-  end
-  euid = uid
-  gid = nil
-  egid = nil
-  if File.exist?("/etc/passwd")
-    File.read("/etc/passwd").lines.each do |line|
-      parts = line.chomp.split(":")
-      if parts.length >= 5 && parts[0] == target_user
-        gid = parts[3].to_i
-        egid = gid
-        break
-      end
-    end
-  end
-  gid  ||= Process.gid
-  egid ||= Process.egid
-  groups = [gid]
-  if File.exist?("/etc/group")
-    File.read("/etc/group").lines.each do |line|
-      parts = line.chomp.split(":")
-      if parts.length >= 4 && parts[3].split(",").include?(target_user)
-        groups.push(parts[2].to_i) unless groups.include?(parts[2].to_i)
-      end
-    end
-  end
+# users[0] on an empty PolyArray returns 0 (not nil) in Spinel, so check
+# by length and always coerce to const char* with "" + .
+if users.length == 0
+  cu = ENV["USER"] || ENV["LOGNAME"] || ENV["USERNAME"] || ""
+  target_user = "" + cu
 else
-  uid   = Process.uid
-  euid  = Process.euid
-  gid   = Process.gid
-  egid  = Process.egid
-  groups = Process.groups
-  groups = [gid] + groups unless groups.include?(gid)
+  target_user = "" + users[0]
 end
+
+uid = lookup_uid_for_name(target_user)
+if uid < 0
+  STDERR.puts "id: '#{target_user}': no such user"
+  exit 1
+end
+euid = uid
+gid  = lookup_gid_for_name(target_user)
+egid = gid
+groups = lookup_groups_for_user(target_user, gid)
 
 use_uid  = opts.use_real ? uid  : euid
 use_gid  = opts.use_real ? gid  : egid

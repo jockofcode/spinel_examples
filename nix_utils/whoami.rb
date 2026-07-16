@@ -24,24 +24,16 @@ ARGV.each do |arg|
   end
 end
 
-# Try ENV["USER"] first, then Etc-equivalent via id command
+# Try ENV["USER"] first, then fall back to /usr/bin/id -un
 user = ENV["USER"] || ENV["LOGNAME"] || ENV["USERNAME"]
 if user.nil?
-  # Fall back: parse /etc/passwd for current UID
-  uid = Process.uid.to_s
-  if File.exist?("/etc/passwd")
-    File.read("/etc/passwd").lines.each do |line|
-      parts = line.chomp.split(":")
-      if parts.length >= 3 && parts[2] == uid
-        user = parts[0]
-        break
-      end
-    end
-  end
+  result = "" + `/usr/bin/id -un`.chomp
+  user = result if result != ""
 end
 
 if user.nil?
-  STDERR.puts "whoami: cannot find name for user ID #{Process.uid}"
+  uid_s = "" + `/usr/bin/id -u`.chomp
+  STDERR.puts "whoami: cannot find name for user ID " + uid_s
   exit 1
 end
 

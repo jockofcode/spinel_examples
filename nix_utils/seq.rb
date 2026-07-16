@@ -127,7 +127,7 @@ end
 # Count decimal places in a number string like "1.50" -> 2, "3" -> 0.
 def decimal_places(s)
   dot = s.index(".")
-  return 0 if dot.nil?
+  return 0 if dot < 0
   # Strip trailing zeros from the original string for a clean count.
   frac = s[dot + 1, s.length - dot - 1]
   i = frac.length - 1
@@ -139,23 +139,24 @@ end
 
 # Format n with the given number of decimal places, without sprintf.
 def format_fixed(n, places)
-  factor = 1
+  factor_f = 1.0
   i = 0
   while i < places
-    factor *= 10
+    factor_f *= 10.0
     i += 1
   end
+  factor_i = factor_f.to_i
   negative = n < 0.0
   abs_n = negative ? -n : n
-  scaled = (abs_n * factor + 0.5).to_i
-  whole = scaled / factor
-  frac = scaled % factor
+  scaled = (abs_n * factor_f + 0.5).to_i
+  whole = scaled / factor_i
+  frac = scaled % factor_i
   frac_str = frac.to_s
   while frac_str.length < places
     frac_str = "0" + frac_str
   end
-  result = places > 0 ? "#{whole}.#{frac_str}" : whole.to_s
-  negative ? "-#{result}" : result
+  result = places > 0 ? whole.to_s + "." + frac_str : whole.to_s
+  negative ? "-" + result : result
 end
 
 def pow10i(n)
@@ -324,9 +325,9 @@ end
 
 first_s, inc_s, last_s =
   case nums.length
-  when 1 then ["1", "1", nums[0]]
-  when 2 then [nums[0], "1", nums[1]]
-  else        [nums[0], nums[1], nums[2]]
+  when 1 then ["1", "1", "" + nums[0]]
+  when 2 then ["" + nums[0], "1", "" + nums[1]]
+  else        ["" + nums[0], "" + nums[1], "" + nums[2]]
   end
 
 first_n = parse_num(first_s, "first value")

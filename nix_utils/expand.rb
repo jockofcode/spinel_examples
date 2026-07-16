@@ -139,12 +139,13 @@ files = ["-"] if files.empty?
 
 exit_code = 0
 files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "expand: #{name}: No such file or directory"
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "expand: #{cname}: No such file or directory"
     exit_code = 1
     next
   end
-  content = (name == "-") ? STDIN.read : File.read(name)
+  content = (cname == "-") ? STDIN.read : File.read(cname)
   process(content, opts)
 end
 exit exit_code

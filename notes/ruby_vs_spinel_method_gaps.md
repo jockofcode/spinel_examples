@@ -256,6 +256,53 @@ at a time. Prefer this pattern over `#split` / `#index` / range slices whenever
 a string is derived from parsed network or `recv` input and then handed across
 methods.
 
+### AOT compile-time type coercion: `"" + s` not `s.dup`
+
+The poly-string issue also produces **C compile errors** in nix_utils-style
+programs, not just runtime failures. When a string crosses a function boundary
+(e.g. ARGV elements, array index access like `files[0]`, or range slices like
+`s[2, s.length - 2]`), Spinel types the value as `sp_RbVal`. Passing it to
+`File.read`, `File.exist?`, `Dir.mkdir`, or most other C-backed calls then
+fails with:
+
+```
+error: passing 'sp_RbVal' to parameter of incompatible type 'const char *'
+```
+
+**Correct coercion idiom — `"" + s`:**
+```ruby
+cname = "" + name   # sp_RbVal → const char*
+File.exist?(cname)  # now OK
+```
+
+This works because the receiver `""` is a typed `const char *`, so Spinel
+resolves `String#+(sp_RbVal)` to the typed overload that returns `const char *`.
+
+**Why `s.dup` does NOT coerce:**
+```ruby
+cname = name.dup    # sp_RbVal.dup → sp_RbVal  (still poly!)
+File.exist?(cname)  # still errors
+```
+
+When `s` is `sp_RbVal`, Spinel cannot statically determine the return type of
+any method call on it (dynamic dispatch returns `sp_RbVal`). So `s.dup` keeps
+the poly type. By contrast, `"" + s` uses a typed receiver (`const char *`) so
+the return type is known statically.
+
+`s.dup` is fine when `s` is already a typed `const char *` — it makes a copy
+with the same static type. Reserve it for that case.
+
+**Other coercion patterns:**
+- `"" + s[n, len]` — range slices also produce `sp_RbVal`; wrap in `"" + `
+- For `+=` with a poly right-hand side: use `str = str + poly` not `str += poly`
+  (the `+=` form uses the generic add; the explicit `str + poly` form dispatches
+  through the typed receiver and returns `const char *`)
+- For empty arrays that get wrongly typed as `Array<mrb_int>`: use a push-pop
+  hint in `initialize` — `@arr = []; @arr.push(Element.new); @arr.pop` — so
+  Spinel infers the correct element type
+- Lambda closures degrade closed-over variable types to `sp_RbVal`. Extract the
+  lambda body into a standalone method with explicit parameters instead.
+
 ## Array and Enumerable Gaps
 
 Ruby's `Array` docs include many methods inherited from or related to

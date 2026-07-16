@@ -107,32 +107,33 @@ end
 
 exit_code = 0
 dirs.each do |dir|
+  cdir = "" + dir
   if opts.parents
-    ok = mkdir_p(dir, opts)
+    ok = mkdir_p(cdir, opts)
     exit_code = 1 unless ok
   else
-    if File.directory?(dir)
-      STDERR.puts "mkdir: cannot create directory '#{dir}': File exists"
+    if File.directory?(cdir)
+      STDERR.puts "mkdir: cannot create directory '#{cdir}': File exists"
       exit_code = 1
       next
     end
-    if File.exist?(dir)
-      STDERR.puts "mkdir: cannot create directory '#{dir}': File exists"
+    if File.exist?(cdir)
+      STDERR.puts "mkdir: cannot create directory '#{cdir}': File exists"
       exit_code = 1
       next
     end
-    parent = File.dirname(dir)
+    parent = File.dirname(cdir)
     if parent != "." && parent != "/" && !File.directory?(parent)
-      STDERR.puts "mkdir: cannot create directory '#{dir}': No such file or directory"
+      STDERR.puts "mkdir: cannot create directory '#{cdir}': No such file or directory"
       exit_code = 1
       next
     end
     if opts.mode
-      Dir.mkdir(dir, opts.mode)
+      Dir.mkdir(cdir, opts.mode)
     else
-      Dir.mkdir(dir)
+      Dir.mkdir(cdir)
     end
-    puts "mkdir: created directory '#{dir}'" if opts.verbose
+    puts "mkdir: created directory '#{cdir}'" if opts.verbose
   end
 end
 

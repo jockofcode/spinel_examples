@@ -354,10 +354,10 @@ def apply_format(fmt, args, arg_start)
       i += 1
       arg = arg_idx < args.length ? args[arg_idx] : ""
       str, i, consumed = apply_spec(fmt, i, arg)
-      output += str
+      output = output + str
       arg_idx += 1 if consumed
     else
-      output += fmt[i]; i += 1
+      output = output + fmt[i]; i += 1
     end
   end
   [output, arg_idx - arg_start]

@@ -125,6 +125,9 @@ def parse_argv(argv)
       opts.follow = true; opts.follow_name = true; opts.retry_open = true
     elsif arg == "--retry"
       opts.retry_open = true
+    elsif arg == "--debug"
+      # Accepted for compatibility; this port emits no extra diagnostics.
+
     elsif arg == "-n" || arg == "--lines"
       index += 1; set_count(argv[index], "lines", opts)
     elsif arg.length > 2 && arg[0, 2] == "-n"
@@ -156,8 +159,9 @@ def parse_argv(argv)
 end
 
 def read_source(name)
-  return STDIN.read if name == "-"
-  File.read(name)
+  cname = "" + name
+  return STDIN.read if cname == "-"
+  File.read(cname)
 end
 
 def line_delim(opts)
@@ -218,27 +222,28 @@ exit_code = 0
 first = true
 
 files.each do |name|
-  if name != "-" && !File.exist?(name)
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
     unless opts.retry_open
-      STDERR.puts "tail: cannot open '#{name}' for reading: No such file or directory"
+      STDERR.puts "tail: cannot open '#{cname}' for reading: No such file or directory"
       exit_code = 1
       next
     end
   end
-  if name != "-" && File.exist?(name) && File.directory?(name)
-    STDERR.puts "tail: error reading '#{name}': Is a directory"
+  if cname != "-" && File.exist?(cname) && File.directory?(cname)
+    STDERR.puts "tail: error reading '#{cname}': Is a directory"
     exit_code = 1
     next
   end
 
   if print_headers
     puts "" unless first
-    label = (name == "-") ? "standard input" : name
+    label = (cname == "-") ? "standard input" : cname
     puts "==> #{label} <=="
   end
   first = false
 
-  STDOUT.write(tail_slice(read_source(name), opts))
+  STDOUT.write(tail_slice(read_source(cname), opts))
 end
 
 # -f / --follow: poll for new content on the last file.

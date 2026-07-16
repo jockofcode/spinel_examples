@@ -87,44 +87,45 @@ def parse_argv(argv)
 end
 
 def rm_file(path, opts)
-  unless File.exist?(path) || File.symlink?(path)
+  cpath = "" + path
+  unless File.exist?(cpath) || File.symlink?(cpath)
     unless opts.force
-      STDERR.puts "rm: cannot remove '#{path}': No such file or directory"
+      STDERR.puts "rm: cannot remove '#{cpath}': No such file or directory"
       return false
     end
     return true
   end
 
   if opts.interactive
-    STDERR.write("rm: remove '#{path}'? ")
+    STDERR.write("rm: remove '#{cpath}'? ")
     ans = STDIN.gets
     return true unless ans && ans.strip.downcase == "y"
   end
 
-  if File.directory?(path) && !File.symlink?(path)
+  if File.directory?(cpath) && !File.symlink?(cpath)
     if opts.recursive
-      Dir.entries(path).each do |entry|
+      Dir.entries(cpath).each do |entry|
         next if entry == "." || entry == ".."
-        rm_file(path + "/" + entry, opts)
+        rm_file(cpath + "/" + entry, opts)
       end
-      Dir.rmdir(path)
-      puts "removed directory '#{path}'" if opts.verbose
+      Dir.rmdir(cpath)
+      puts "removed directory '#{cpath}'" if opts.verbose
     elsif opts.dir
-      entries = Dir.entries(path).reject { |e| e == "." || e == ".." }
+      entries = Dir.entries(cpath).reject { |e| e == "." || e == ".." }
       if entries.empty?
-        Dir.rmdir(path)
-        puts "removed directory '#{path}'" if opts.verbose
+        Dir.rmdir(cpath)
+        puts "removed directory '#{cpath}'" if opts.verbose
       else
-        STDERR.puts "rm: cannot remove '#{path}': Directory not empty"
+        STDERR.puts "rm: cannot remove '#{cpath}': Directory not empty"
         return false
       end
     else
-      STDERR.puts "rm: cannot remove '#{path}': Is a directory"
+      STDERR.puts "rm: cannot remove '#{cpath}': Is a directory"
       return false
     end
   else
-    File.unlink(path)
-    puts "removed '#{path}'" if opts.verbose
+    File.unlink(cpath)
+    puts "removed '#{cpath}'" if opts.verbose
   end
   true
 end

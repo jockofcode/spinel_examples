@@ -23,7 +23,7 @@ def interpret_escapes(text)
   while index < length
     char = text[index]
     if char != "\\" || index + 1 >= length
-      out += char
+      out = out + char
       index += 1
       next
     end
@@ -56,7 +56,7 @@ def interpret_escapes(text)
       digits = ""
       scan = index + 2
       while scan < length && digits.length < 2 && hex_digit?(text[scan])
-        digits += text[scan]
+        digits = digits + text[scan]
         scan += 1
       end
       if digits == ""
@@ -70,7 +70,7 @@ def interpret_escapes(text)
       digits = ""
       scan = index + 2
       while scan < length && digits.length < 3 && octal_digit?(text[scan])
-        digits += text[scan]
+        digits = digits + text[scan]
         scan += 1
       end
       out += (digits == "" ? 0 : digits.to_i(8)).chr

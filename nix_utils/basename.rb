@@ -102,14 +102,15 @@ eol = opts.zero ? "\0" : "\n"
 
 if !opts.multiple && names.length <= 2
   # Traditional two-argument form: basename NAME [SUFFIX].
-  name   = names[0]
+  name   = "" + names[0]
   suffix = names.length == 2 ? names[1] : opts.suffix
   result = File.basename(name)
   result = strip_suffix(result, suffix)
   STDOUT.write(result + eol)
 else
   names.each do |name|
-    result = File.basename(name)
+    cname = "" + name
+    result = File.basename(cname)
     result = strip_suffix(result, opts.suffix)
     STDOUT.write(result + eol)
   end

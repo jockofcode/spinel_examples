@@ -5,9 +5,13 @@
 #
 # Flags:
 #   -n MIN, --bytes=MIN  minimum sequence length (default 4)
+#   -<NUMBER>            same as -n NUMBER (e.g. -6)
 #   -t RADIX, --radix=RADIX  print offset in given base: d/o/x (decimal/octal/hex)
 #   -o              shorthand for -t o (GNU compat)
 #   -a, --all       scan the whole file (default; kept for compat)
+#   -f, --print-file-name   print the file name before each string
+#   -w, --include-all-whitespace  count tab/newline/etc. as part of a string
+#   -s, --output-separator=SEP    separator between strings (default newline)
 #   -e ENCODING     character encoding: s=single-byte (default), b=big16, l=little16
 #   --help          usage
 #
@@ -28,18 +32,35 @@ USAGE = "Usage: strings [OPTION]... FILE...\n" \
         "  -t RADIX              print file offset (d=decimal, o=octal, x=hex)\n" \
         "  -o                    print octal offset (same as -t o)\n" \
         "  -a, --all             scan entire file (default)\n" \
+        "  -f, --print-file-name print the file name before each string\n" \
+        "  -w, --include-all-whitespace  keep tab/newline inside strings\n" \
+        "  -s, --output-separator=SEP    string separator (default newline)\n" \
         "  -e ENCODING           character encoding (only s/single-byte supported)\n" \
         "  --help"
 
 PRINTABLE_RE = Regexp.new("[ -~]")  # ASCII 0x20–0x7E
+WHITESPACE_BYTES = [9, 10, 11, 12, 13]  # \t \n \v \f \r
 
 class StringsOptions
-  attr_accessor :min_len, :radix, :all_sections
+  attr_accessor :min_len, :radix, :all_sections, :print_filename, :include_ws, :separator
   def initialize
-    @min_len      = 4
-    @radix        = nil  # nil = no offset
-    @all_sections = true
+    @min_len        = 4
+    @radix          = nil  # nil = no offset
+    @all_sections   = true
+    @print_filename = false
+    @include_ws     = false
+    @separator      = "\n"
   end
+end
+
+def all_digits?(s)
+  return false if s == ""
+  i = 0
+  while i < s.length
+    return false unless "0123456789".include?(s[i])
+    i += 1
+  end
+  true
 end
 
 def parse_argv(argv)
@@ -70,6 +91,31 @@ def parse_argv(argv)
 
     if arg == "-a" || arg == "--all" || arg == "--data"
       opts.all_sections = true
+      index += 1
+      next
+    end
+
+    if arg == "-f" || arg == "--print-file-name"
+      opts.print_filename = true
+      index += 1
+      next
+    end
+
+    if arg == "-w" || arg == "--include-all-whitespace"
+      opts.include_ws = true
+      index += 1
+      next
+    end
+
+    if arg == "-s" || arg == "--output-separator"
+      index += 1
+      opts.separator = argv[index]
+      index += 1
+      next
+    end
+
+    if arg.length > 19 && arg[0, 19] == "--output-separator="
+      opts.separator = arg[19, arg.length - 19]
       index += 1
       next
     end
@@ -131,6 +177,13 @@ def parse_argv(argv)
       next
     end
 
+    # Historical form: -<NUMBER> is the same as -n NUMBER.
+    if arg.length > 1 && all_digits?(arg[1, arg.length - 1])
+      opts.min_len = arg[1, arg.length - 1].to_i
+      index += 1
+      next
+    end
+
     STDERR.puts "strings: invalid option -- '#{arg}'"
     STDERR.puts "Try 'strings --help' for more information."
     exit 1
@@ -170,30 +223,37 @@ def format_offset(off, radix)
   s + " "
 end
 
-def process_content(content, opts)
+def printable_byte?(byte, opts)
+  return true if byte >= 32 && byte <= 126
+  return true if opts.include_ws && WHITESPACE_BYTES.include?(byte)
+  false
+end
+
+def emit_string(start, str, opts, filename)
+  line = ""
+  line += "#{filename}: " if opts.print_filename
+  line += format_offset(start, opts.radix)
+  line += str
+  STDOUT.write(line + opts.separator)
+end
+
+def process_content(content, opts, filename)
   current = ""
   offset_start = 0
   pos = 0
 
   content.bytes.each do |byte|
-    ch = byte.chr
-    if PRINTABLE_RE.match(ch)
+    if printable_byte?(byte, opts)
       offset_start = pos if current.length == 0
-      current += ch
+      current += byte.chr
     else
-      if current.length >= opts.min_len
-        prefix = format_offset(offset_start, opts.radix)
-        puts prefix + current
-      end
+      emit_string(offset_start, current, opts, filename) if current.length >= opts.min_len
       current = ""
     end
     pos += 1
   end
   # flush remaining sequence
-  if current.length >= opts.min_len
-    prefix = format_offset(offset_start, opts.radix)
-    puts prefix + current
-  end
+  emit_string(offset_start, current, opts, filename) if current.length >= opts.min_len
 end
 
 opts, files = parse_argv(ARGV)
@@ -201,13 +261,14 @@ files = ["-"] if files.empty?
 
 exit_code = 0
 files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "strings: #{name}: No such file or directory"
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "strings: #{cname}: No such file or directory"
     exit_code = 1
     next
   end
-  content = (name == "-") ? STDIN.read : File.read(name)
-  process_content(content, opts)
+  content = (cname == "-") ? STDIN.read : File.read(cname)
+  process_content(content, opts, cname)
 end
 
 exit exit_code

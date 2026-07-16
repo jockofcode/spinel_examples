@@ -4,17 +4,17 @@
 # two columns of 8 hex bytes per line with a printable-ASCII sidebar.
 #
 # Flags:
-#   -C, --canonical  canonical hex+ASCII display (16 bytes per line with ASCII)
-#   -b               one-byte octal display
-#   -c               one-byte character display
-#   -d               two-byte decimal display
-#   -o               two-byte octal display
-#   -x               two-byte hex display (default)
-#   -e FORMAT        format string (basic support: /n 'fmt' specifiers)
-#   -n COUNT         interpret only COUNT bytes of input
-#   -s SKIP          skip SKIP bytes from the beginning
-#   -v               display all input data without asterisk for repeats
-#   --help           usage
+#   -C, --canonical         canonical hex+ASCII display (16 bytes + ASCII)
+#   -b, --one-byte-octal    one-byte octal display
+#   -c, --one-byte-char     one-byte character display
+#   -X, --one-byte-hex      one-byte hexadecimal display
+#   -d, --two-bytes-decimal two-byte decimal display
+#   -o, --two-bytes-octal   two-byte octal display
+#   -x, --two-bytes-hex     two-byte hex display (default)
+#   -n, --length COUNT      interpret only COUNT bytes of input
+#   -s, --skip SKIP         skip SKIP bytes from the beginning
+#   -v, --no-squeezing      display all input data without asterisk for repeats
+#   --help                  usage
 #
 # Compile: spinel nix_utils/hexdump.rb -o nix_utils/bin/hexdump
 # Run:
@@ -55,19 +55,22 @@ def parse_argv(argv)
     if arg == "--help"; puts USAGE; exit 0; end
     if arg == "-C" || arg == "--canonical"
       opts.canonical = true
-    elsif arg == "-b"; opts.format_char = "b"
-    elsif arg == "-c"; opts.format_char = "c"
-    elsif arg == "-d"; opts.format_char = "d"
-    elsif arg == "-o"; opts.format_char = "o"
-    elsif arg == "-x"; opts.format_char = "x"
-    elsif arg == "-v"; opts.verbose = true
-    elsif arg == "-e"
+    elsif arg == "-b" || arg == "--one-byte-octal"; opts.format_char = "b"
+    elsif arg == "-c" || arg == "--one-byte-char";  opts.format_char = "c"
+    elsif arg == "-X" || arg == "--one-byte-hex";   opts.format_char = "X"
+    elsif arg == "-d" || arg == "--two-bytes-decimal"; opts.format_char = "d"
+    elsif arg == "-o" || arg == "--two-bytes-octal";   opts.format_char = "o"
+    elsif arg == "-x" || arg == "--two-bytes-hex";     opts.format_char = "x"
+    elsif arg == "-v" || arg == "--no-squeezing"; opts.verbose = true
+    elsif arg == "-e" || arg == "--format"
       index += 1  # accept format string, ignore for now
-    elsif arg == "-n"
+    elsif arg == "-f" || arg == "--format-file"
+      index += 1  # accept format file, ignore for now
+    elsif arg == "-n" || arg == "--length"
       index += 1; opts.count = argv[index].to_i
     elsif arg.length > 2 && arg[0, 2] == "-n"
       opts.count = arg[2, arg.length - 2].to_i
-    elsif arg == "-s"
+    elsif arg == "-s" || arg == "--skip"
       index += 1; opts.skip = argv[index].to_i
     elsif arg.length > 2 && arg[0, 2] == "-s"
       opts.skip = arg[2, arg.length - 2].to_i
@@ -116,15 +119,15 @@ def canonical_line(bytes, addr)
       b = bytes[i]
       hex_part += " " + to_hex(b, 2)
       hex_part += " " if i == 7  # extra space in middle
+      # The ASCII sidebar shows only the bytes actually present, no padding.
       ascii_part += (b >= 32 && b < 127) ? b.chr : "."
     else
       hex_part += "   "
       hex_part += " " if i == 7
-      ascii_part += " "
     end
     i += 1
   end
-  "#{addr_str}  #{hex_part}  |#{ascii_part}|"
+  "#{addr_str} #{hex_part}  |#{ascii_part}|"
 end
 
 def dump_canonical(data, opts)
@@ -141,10 +144,9 @@ end
 def dump_generic(data, opts)
   bytes = data.bytes
   # Determine columns and element size
-  elem_size = if opts.format_char == "b" || opts.format_char == "c"; 1
-               else 2  # d, o, x
-               end
-  cols = opts.format_char == "c" || opts.format_char == "b" ? 16 : 8
+  one_byte = opts.format_char == "b" || opts.format_char == "c" || opts.format_char == "X"
+  elem_size = one_byte ? 1 : 2   # d, o, x are two-byte
+  cols = one_byte ? 16 : 8
 
   addr = 0
   last_line = nil
@@ -174,6 +176,8 @@ def dump_generic(data, opts)
     while i < chunk_size
       if opts.format_char == "b"
         parts.push(to_oct(chunk[i], 3))
+      elsif opts.format_char == "X"
+        parts.push(to_hex(chunk[i], 2))
       elsif opts.format_char == "c"
         b = chunk[i]
         parts.push(HXDUMP_CHAR_NAMES[b] || (b >= 32 && b < 127 ? b.chr.rjust(3) : to_oct(b, 3)))
@@ -205,12 +209,13 @@ files = ["-"] if files.empty?
 data = ""
 exit_code = 0
 files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "hexdump: #{name}: No such file or directory"
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "hexdump: #{cname}: No such file or directory"
     exit_code = 1
     next
   end
-  data += (name == "-") ? STDIN.read : File.read(name)
+  data = data + ((cname == "-") ? STDIN.read : File.read(cname))
 end
 
 data = data[opts.skip, data.length - opts.skip] || ""

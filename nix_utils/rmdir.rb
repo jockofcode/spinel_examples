@@ -65,6 +65,7 @@ def parse_argv(argv)
 end
 
 def remove_dir(path, opts)
+  path = "" + path
   unless File.directory?(path)
     STDERR.puts "rmdir: failed to remove '#{path}': No such file or directory"
     return false
@@ -88,7 +89,8 @@ end
 
 exit_code = 0
 dirs.each do |dir|
-  ok = remove_dir(dir, opts)
+  cdir = "" + dir
+  ok = remove_dir(cdir, opts)
   unless ok
     exit_code = 1
     next
@@ -96,7 +98,7 @@ dirs.each do |dir|
 
   if opts.parents
     # Walk up removing each parent that becomes empty
-    current = dir
+    current = cdir
     loop do
       parent = File.dirname(current)
       break if parent == current || parent == "." || parent == "/"

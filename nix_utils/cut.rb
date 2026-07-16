@@ -8,9 +8,13 @@
 #   -c LIST, --characters=LIST     select only these characters
 #   -f LIST, --fields=LIST         select only these fields; default delimiter tab
 #   -d DELIM, --delimiter=DELIM    field delimiter for -f (default: tab)
+#   -F LIST                        like -f but implies -w and -O ' '
 #   --complement                   complement the selection
 #   -s, --only-delimited           suppress lines without delimiter (-f only)
-#   -n                             (ignored; with -b, do not split multi-byte chars)
+#   -w, --whitespace-delimited[=trimmed]  fields separated by runs of blanks
+#   -O STR, --output-delimiter=STR use STR as the output delimiter
+#   -z, --zero-terminated          line delimiter is NUL, not newline
+#   -n, --no-partial               (ignored; with -b, do not split multi-byte chars)
 #   --help                         usage
 #
 # LIST is a comma-separated list of ranges, where each range is one of:
@@ -36,6 +40,7 @@ USAGE = "Usage: cut OPTION... [FILE]...\n" \
 
 class CutOptions
   attr_accessor :mode, :list_str, :delimiter, :complement, :suppress, :output_delimiter
+  attr_accessor :whitespace, :ws_trimmed, :zero
   def initialize
     @mode             = nil   # :bytes, :chars, :fields
     @list_str         = nil
@@ -43,6 +48,9 @@ class CutOptions
     @complement       = false
     @suppress         = false
     @output_delimiter = nil   # defaults to the input delimiter
+    @whitespace       = false
+    @ws_trimmed       = false
+    @zero             = false
   end
 end
 
@@ -63,8 +71,24 @@ def parse_argv(argv)
       opts.complement = true
     elsif arg == "-s" || arg == "--only-delimited"
       opts.suppress = true
-    elsif arg == "-n"
+    elsif arg == "-z" || arg == "--zero-terminated"
+      opts.zero = true
+    elsif arg == "-w" || arg == "--whitespace-delimited"
+      opts.whitespace = true
+    elsif arg == "--whitespace-delimited=trimmed"
+      opts.whitespace = true; opts.ws_trimmed = true
+    elsif arg == "-n" || arg == "--no-partial"
       # ignored
+    elsif arg == "-F"
+      index += 1; opts.mode = :fields; opts.list_str = argv[index]
+      opts.whitespace = true; opts.output_delimiter = " " if opts.output_delimiter.nil?
+    elsif arg.length > 2 && arg[0, 2] == "-F"
+      opts.mode = :fields; opts.list_str = arg[2, arg.length - 2]
+      opts.whitespace = true; opts.output_delimiter = " " if opts.output_delimiter.nil?
+    elsif arg == "-O" || arg == "--output-delimiter"
+      index += 1; opts.output_delimiter = argv[index]
+    elsif arg.length > 2 && arg[0, 2] == "-O"
+      opts.output_delimiter = arg[2, arg.length - 2]
     elsif arg == "-b" || arg == "--bytes"
       index += 1; opts.mode = :bytes; opts.list_str = argv[index]
     elsif arg.length > 2 && arg[0, 2] == "-b"
@@ -154,8 +178,7 @@ def selected?(idx, indices, open_end, complement)
   complement ? !result : result
 end
 
-def cut_chars(line, indices, open_end, complement, output_sep)
-  body  = line.chomp
+def cut_chars(body, indices, open_end, complement)
   chars = []
   i = 0
   while i < body.length
@@ -163,19 +186,15 @@ def cut_chars(line, indices, open_end, complement, output_sep)
     i += 1
   end
   result = ""
-  first = true
   c = 0
   while c < chars.length
-    if selected?(c + 1, indices, open_end, complement)
-      result += chars[c]
-    end
+    result += chars[c] if selected?(c + 1, indices, open_end, complement)
     c += 1
   end
-  result + "\n"
+  result
 end
 
-def cut_bytes(line, indices, open_end, complement)
-  body  = line.chomp
+def cut_bytes(body, indices, open_end, complement)
   bytes = []
   i = 0
   while i < body.bytesize
@@ -188,35 +207,60 @@ def cut_bytes(line, indices, open_end, complement)
     result += bytes[b] if selected?(b + 1, indices, open_end, complement)
     b += 1
   end
-  result + "\n"
+  result
 end
 
-def cut_fields(line, indices, open_end, complement, delim, suppress, out_delim)
-  body = line.chomp
-  # Suppress lines without the delimiter.
-  if suppress && !body.include?(delim)
-    return nil
-  end
-  # Lines without delimiter pass through unchanged when -s is not set.
-  if !body.include?(delim)
-    return complement ? "\n" : line
-  end
-
-  fields = body.split(delim, -1)
-  selected = []
+# Split a line into fields on runs of blanks (space or tab). With trimmed, drop
+# leading and trailing blanks so there is no empty first or last field.
+def split_whitespace(body, trimmed)
+  fields = []
+  cur = ""
+  in_field = false
   i = 0
-  while i < fields.length
-    if selected?(i + 1, indices, open_end, complement)
-      selected.push(fields[i])
+  while i < body.length
+    c = body[i]
+    if c == " " || c == "\t"
+      if in_field
+        fields.push(cur); cur = ""; in_field = false
+      elsif !trimmed
+        # Untrimmed: a leading run of blanks yields an empty leading field once.
+        fields.push("") if fields.empty? && i == 0
+      end
+    else
+      in_field = true
+      cur += c
     end
     i += 1
   end
-  selected.join(out_delim) + "\n"
+  fields.push(cur) if in_field
+  fields
+end
+
+def cut_fields(body, indices, open_end, complement, delim, suppress, out_delim, opts)
+  if opts.whitespace
+    has_delim = body.include?(" ") || body.include?("\t")
+    return nil if suppress && !has_delim
+    return complement ? "" : body if !has_delim
+    fields = split_whitespace(body, opts.ws_trimmed)
+  else
+    return nil if suppress && !body.include?(delim)
+    return complement ? "" : body if !body.include?(delim)
+    fields = body.split(delim, -1)
+  end
+
+  selected = []
+  i = 0
+  while i < fields.length
+    selected.push(fields[i]) if selected?(i + 1, indices, open_end, complement)
+    i += 1
+  end
+  selected.join(out_delim)
 end
 
 def read_source(name)
-  return STDIN.read if name == "-"
-  File.read(name)
+  cname = "" + name
+  return STDIN.read if cname == "-"
+  File.read(cname)
 end
 
 opts, files = parse_argv(ARGV)
@@ -226,33 +270,38 @@ if opts.mode.nil?
   exit 1
 end
 
-if opts.delimiter.length != 1 && opts.mode == :fields
+if opts.delimiter.length != 1 && opts.mode == :fields && !opts.whitespace
   STDERR.puts "cut: the delimiter must be a single character"
   exit 1
 end
 
 indices, open_end = parse_list(opts.list_str)
 out_delim = opts.output_delimiter || opts.delimiter
+line_delim = opts.zero ? "\0" : "\n"
 
 files = ["-"] if files.empty?
 exit_code = 0
 
 files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "cut: #{name}: No such file or directory"
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "cut: #{cname}: No such file or directory"
     exit_code = 1
     next
   end
-  content = read_source(name)
-  content.lines.each do |line|
+  content = read_source(cname)
+  records = content.split(line_delim, -1)
+  # A trailing empty record appears when content ends with the delimiter.
+  records.pop if !records.empty? && records.last == ""
+  records.each do |body|
     result =
       case opts.mode
-      when :chars  then cut_chars(line, indices, open_end, opts.complement, out_delim)
-      when :bytes  then cut_bytes(line, indices, open_end, opts.complement)
-      when :fields then cut_fields(line, indices, open_end, opts.complement,
-                                   opts.delimiter, opts.suppress, out_delim)
+      when :chars  then cut_chars(body, indices, open_end, opts.complement)
+      when :bytes  then cut_bytes(body, indices, open_end, opts.complement)
+      when :fields then cut_fields(body, indices, open_end, opts.complement,
+                                   opts.delimiter, opts.suppress, out_delim, opts)
       end
-    STDOUT.write(result) unless result.nil?
+    STDOUT.write(result + line_delim) unless result.nil?
   end
 end
 

@@ -66,9 +66,12 @@ class GrepOptions
   attr_accessor :before_context, :after_context, :recursive, :color
   attr_accessor :include_glob, :exclude_glob
   attr_accessor :compiled_re, :fixed_pats
+  attr_accessor :byte_offset, :initial_tab, :null_name, :null_data, :label, :group_sep
 
   def initialize
     @raw_patterns    = []
+    @raw_patterns.push("")
+    @raw_patterns.pop
     @fixed_string    = false
     @ignore_case     = false
     @invert          = false
@@ -92,6 +95,12 @@ class GrepOptions
     @exclude_glob    = nil
     @compiled_re     = nil
     @fixed_pats      = nil
+    @byte_offset     = false
+    @initial_tab     = false
+    @null_name       = false
+    @null_data       = false
+    @label           = "(standard input)"
+    @group_sep       = "--"
   end
 end
 
@@ -178,19 +187,19 @@ def parse_argv(argv)
         STDERR.puts "grep: option requires an argument -- 'e'"
         exit 2
       end
-      opts.raw_patterns.push(argv[index])
+      opts.raw_patterns.push("" + argv[index])
       index += 1
       next
     end
 
     if arg.length > 2 && arg[0, 2] == "-e"
-      opts.raw_patterns.push(arg[2, arg.length - 2])
+      opts.raw_patterns.push("" + arg[2, arg.length - 2])
       index += 1
       next
     end
 
     if arg == "--regexp="[0, arg.length] && arg.length > 9 && arg[0, 9] == "--regexp="
-      opts.raw_patterns.push(arg[9, arg.length - 9])
+      opts.raw_patterns.push("" + arg[9, arg.length - 9])
       index += 1
       next
     end
@@ -207,7 +216,7 @@ def parse_argv(argv)
         exit 2
       end
       File.read(fname).lines.each do |l|
-        l = l.end_with?("\n") ? l[0, l.length - 1] : l
+        l = l.end_with?("\n") ? "" + l[0, l.length - 1] : l
         opts.raw_patterns.push(l) unless l == ""
       end
       index += 1
@@ -221,7 +230,7 @@ def parse_argv(argv)
         exit 2
       end
       File.read(fname).lines.each do |l|
-        l = l.end_with?("\n") ? l[0, l.length - 1] : l
+        l = l.end_with?("\n") ? "" + l[0, l.length - 1] : l
         opts.raw_patterns.push(l) unless l == ""
       end
       index += 1
@@ -310,6 +319,73 @@ def parse_argv(argv)
       next
     end
 
+    if arg == "--null" || arg == "-Z"
+      opts.null_name = true
+      index += 1
+      next
+    end
+
+    if arg == "--null-data"
+      opts.null_data = true
+      index += 1
+      next
+    end
+
+    if arg == "--byte-offset"
+      opts.byte_offset = true
+      index += 1
+      next
+    end
+
+    if arg == "--initial-tab"
+      opts.initial_tab = true
+      index += 1
+      next
+    end
+
+    if arg == "--no-ignore-case"
+      opts.ignore_case = false
+      index += 1
+      next
+    end
+
+    if arg == "--no-group-separator"
+      opts.group_sep = nil
+      index += 1
+      next
+    end
+
+    if arg.length > 18 && arg[0, 18] == "--group-separator="
+      opts.group_sep = arg[18, arg.length - 18]
+      index += 1
+      next
+    end
+
+    if arg.length > 8 && arg[0, 8] == "--label="
+      opts.label = arg[8, arg.length - 8]
+      index += 1
+      next
+    end
+
+    # Accepted for compatibility; these do not change behavior in this port,
+    # which always reads input as text with newline-separated lines.
+    if arg == "--text" || arg == "--binary" || arg == "--line-buffered" ||
+       arg == "--mmap" ||
+       (arg.length > 15 && arg[0, 15] == "--binary-files=") ||
+       (arg.length > 10 && arg[0, 10] == "--devices=") ||
+       (arg.length > 14 && arg[0, 14] == "--exclude-dir=") ||
+       (arg.length > 15 && arg[0, 15] == "--exclude-from=")
+      index += 1
+      next
+    end
+
+    if arg.length > 14 && arg[0, 14] == "--directories="
+      action = arg[14, arg.length - 14]
+      opts.recursive = true if action == "recurse"
+      index += 1
+      next
+    end
+
     # Short flag cluster
     letters = arg[1, arg.length - 1]
     li = 0
@@ -347,6 +423,16 @@ def parse_argv(argv)
         opts.recursive = true
       elsif letter == "E" || letter == "G" || letter == "P"
         # regex dialect flags: no-op (Ruby uses ERE by default)
+      elsif letter == "a" || letter == "U" || letter == "I"
+        # text / binary handling: no-op (input is always read as text)
+      elsif letter == "b"
+        opts.byte_offset = true
+      elsif letter == "T"
+        opts.initial_tab = true
+      elsif letter == "Z"
+        opts.null_name = true
+      elsif letter == "z"
+        opts.null_data = true
       else
         STDERR.puts "grep: invalid option -- '#{letter}'"
         STDERR.puts "Try 'grep --help' for more information."
@@ -384,9 +470,9 @@ end
 # Returns true if any pattern matches (before invert is applied).
 def raw_match?(line, opts)
   if opts.fixed_string
-    check = opts.ignore_case ? line.downcase : line
+    check = "" + (opts.ignore_case ? line.downcase : line)
     opts.fixed_pats.each do |pat|
-      sub = opts.ignore_case ? pat.downcase : pat
+      sub = "" + (opts.ignore_case ? pat.downcase : pat)
       if opts.line_match
         return true if check == sub
       elsif opts.word_match
@@ -414,8 +500,8 @@ end
 def each_match_in_line(line, opts)
   if opts.fixed_string
     opts.fixed_pats.each do |pat|
-      check = opts.ignore_case ? line.downcase : line
-      sub   = opts.ignore_case ? pat.downcase : pat
+      check = "" + (opts.ignore_case ? line.downcase : line)
+      sub   = "" + (opts.ignore_case ? pat.downcase : pat)
       next if sub == ""
       pos = 0
       while pos <= check.length - sub.length
@@ -447,20 +533,30 @@ def show_fname?(opts, file_count)
   file_count > 1
 end
 
-# Format a single output line and write it.
-def emit_line(line, line_num, filename, print_fname, sep, opts)
+# Format a single output line and write it. byte_off is the byte offset of the
+# line within its file (used by -b).
+def emit_line(line, line_num, byte_off, filename, print_fname, sep, opts)
   out = ""
-  out += "#{filename}#{sep}" if print_fname
-  out += "#{line_num}:" if opts.line_number
-  out += line
-  puts out
+  out = out + filename + (opts.null_name ? "\0" : sep) if print_fname
+  out = out + "#{line_num}#{sep}" if opts.line_number
+  out = out + "#{byte_off}#{sep}" if opts.byte_offset
+  out = out + "\t" if opts.initial_tab
+  out = out + line
+  STDOUT.write(out + (opts.null_data ? "\0" : "\n"))
 end
 
 # Search one file's content. Returns [matched_any, exit_code_contribution].
 def grep_content(content, filename, print_fname, opts)
-  lines = []
-  content.lines.each do |raw|
-    lines.push(raw.end_with?("\n") ? raw[0, raw.length - 1] : raw)
+  data_delim = opts.null_data ? "\0" : "\n"
+  lines = content.split(data_delim, -1)
+  lines.pop if !lines.empty? && lines.last == ""
+
+  # Precompute each line's byte offset within the file for -b.
+  offsets = []
+  running = 0
+  lines.each do |l|
+    offsets.push(running)
+    running += l.bytesize + 1   # + delimiter byte
   end
 
   match_count = 0
@@ -468,11 +564,13 @@ def grep_content(content, filename, print_fname, opts)
   before_buf  = []   # lines waiting to be printed as before-context
   after_left  = 0    # lines of after-context still to emit
   need_sep    = false
+  group_sep   = opts.group_sep
 
   use_context = opts.before_context > 0 || opts.after_context > 0
 
   line_num = 0
   lines.each do |line|
+    idx = line_num
     line_num += 1
     break if !opts.max_count.nil? && match_count >= opts.max_count
 
@@ -491,16 +589,17 @@ def grep_content(content, filename, print_fname, opts)
         # accumulate, print at end
       else
         if use_context
-          # Print "--" separator between non-adjacent groups
+          # Print the group separator between non-adjacent groups.
           if need_sep
-            puts "--"
+            STDOUT.write(group_sep + "\n") unless group_sep.nil?
             need_sep = false
           end
           # Flush before-context
           bi = 0
           start_num = line_num - before_buf.length
           while bi < before_buf.length
-            emit_line(before_buf[bi], start_num + bi, filename, print_fname, "-", opts)
+            emit_line(before_buf[bi], start_num + bi, offsets[start_num - 1 + bi],
+                      filename, print_fname, "-", opts)
             bi += 1
           end
           before_buf = []
@@ -508,10 +607,10 @@ def grep_content(content, filename, print_fname, opts)
 
         if opts.only_matching
           each_match_in_line(line, opts) do |m|
-            emit_line(m, line_num, filename, print_fname, ":", opts)
+            emit_line(m, line_num, offsets[idx], filename, print_fname, ":", opts)
           end
         else
-          emit_line(line, line_num, filename, print_fname, ":", opts)
+          emit_line(line, line_num, offsets[idx], filename, print_fname, ":", opts)
         end
 
         after_left = opts.after_context
@@ -520,7 +619,7 @@ def grep_content(content, filename, print_fname, opts)
     else
       if after_left > 0
         unless opts.quiet || opts.list_files || opts.list_no_match || opts.count_only
-          emit_line(line, line_num, filename, print_fname, "-", opts)
+          emit_line(line, line_num, offsets[idx], filename, print_fname, "-", opts)
         end
         after_left -= 1
         need_sep = false
@@ -552,15 +651,17 @@ end
 # Collect all files to search, expanding directories when -r is set.
 def collect_files(paths, opts)
   result = []
+  result.push(""); result.pop
   paths.each do |path|
-    if File.directory?(path)
+    cpath = "" + path
+    if File.directory?(cpath)
       if opts.recursive
-        expand_dir(path, opts, result)
+        expand_dir(cpath, opts, result)
       else
-        STDERR.puts "grep: #{path}: Is a directory" unless opts.suppress_errors
+        STDERR.puts "grep: #{cpath}: Is a directory" unless opts.suppress_errors
       end
     else
-      result.push(path)
+      result.push(cpath)
     end
   end
   result
@@ -606,14 +707,15 @@ exit_code = 1  # 1 = no match found
 found_error = false
 
 all_files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "grep: #{name}: No such file or directory" unless opts.suppress_errors
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "grep: #{cname}: No such file or directory" unless opts.suppress_errors
     found_error = true
     next
   end
 
-  content = (name == "-") ? STDIN.read : File.read(name)
-  display_name = (name == "-") ? "(standard input)" : name
+  content = (cname == "-") ? STDIN.read : File.read(cname)
+  display_name = (cname == "-") ? opts.label : cname
   print_fname = show_fname?(opts, file_count)
 
   matched_any, match_count, total_lines = grep_content(content, display_name, print_fname, opts)

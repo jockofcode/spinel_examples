@@ -77,8 +77,9 @@ end
 
 # Read one source fully. "-" is standard input.
 def read_source(name)
-  return STDIN.read if name == "-"
-  File.read(name)
+  cname = "" + name
+  return STDIN.read if cname == "-"
+  File.read(cname)
 end
 
 # Print one result row. counts is [lines, words, chars, bytes, max_length];
@@ -174,8 +175,13 @@ selection, files, files0_from, total_when = parse_argv(ARGV)
 
 # --files0-from=F: append NUL-separated filenames from F to the file list.
 unless files0_from.nil?
-  content = files0_from == "-" ? STDIN.read : File.read(files0_from)
-  content.split("\0").each { |name| files.push(name) unless name == "" }
+  ff = "" + files0_from
+  content = ff == "-" ? STDIN.read : File.read(ff)
+  content.split("\0").each do |seg|
+    unless seg == ""
+      files.push("" + seg)
+    end
+  end
 end
 
 # Default selection: lines, words, bytes.
@@ -193,19 +199,20 @@ exit_code = 0
 row_count = 0   # number of files successfully processed
 
 files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "wc: #{name}: No such file or directory"
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "wc: #{cname}: No such file or directory"
     exit_code = 1
     next
   end
-  if name != "-" && File.directory?(name)
-    STDERR.puts "wc: #{name}: Is a directory"
+  if cname != "-" && File.directory?(cname)
+    STDERR.puts "wc: #{cname}: Is a directory"
     exit_code = 1
     next
   end
 
-  counts = count_text(read_source(name))
-  label  = (name == "-") ? "" : name
+  counts = count_text(read_source(cname))
+  label  = (cname == "-") ? "" : cname
 
   # --total=only suppresses individual rows.
   print_row(counts, selection, label) unless total_when == "only"

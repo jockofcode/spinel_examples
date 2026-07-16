@@ -6,6 +6,9 @@
 #
 # Flags:
 #   -w N, --width=N      maximum line width (default 75)
+#   -g N, --goal=N       goal line width (default: about 93% of width)
+#   -c, --crown-margin   preserve the indent of the first two lines
+#   -t, --tagged-paragraph  like -c, but the first line's indent is the tag
 #   -s, --split-only     split long lines but do not fill/join short ones
 #   -u, --uniform-spacing  one space between words, two after sentence ends
 #   -p PREFIX, --prefix=PREFIX  reformat only lines beginning with PREFIX
@@ -26,12 +29,15 @@ USAGE = "Usage: fmt [-w WIDTH] [OPTION]... [FILE]...\n" \
         "  --help"
 
 class FmtOptions
-  attr_accessor :width, :split_only, :uniform, :prefix
+  attr_accessor :width, :split_only, :uniform, :prefix, :goal, :crown, :tagged
   def initialize
     @width      = 75
     @split_only = false
     @uniform    = false
     @prefix     = nil
+    @goal       = nil
+    @crown      = false
+    @tagged     = false
   end
 end
 
@@ -52,12 +58,22 @@ def parse_argv(argv)
       opts.split_only = true
     elsif arg == "-u" || arg == "--uniform-spacing"
       opts.uniform = true
+    elsif arg == "-c" || arg == "--crown-margin"
+      opts.crown = true
+    elsif arg == "-t" || arg == "--tagged-paragraph"
+      opts.tagged = true
     elsif arg == "-w" || arg == "--width"
       index += 1; opts.width = argv[index].to_i
     elsif arg.length > 2 && arg[0, 2] == "-w"
       opts.width = arg[2, arg.length - 2].to_i
     elsif arg.length > 8 && arg[0, 8] == "--width="
       opts.width = arg[8, arg.length - 8].to_i
+    elsif arg == "-g" || arg == "--goal"
+      index += 1; opts.goal = argv[index].to_i
+    elsif arg.length > 2 && arg[0, 2] == "-g"
+      opts.goal = arg[2, arg.length - 2].to_i
+    elsif arg.length > 7 && arg[0, 7] == "--goal="
+      opts.goal = arg[7, arg.length - 7].to_i
     elsif arg == "-p" || arg == "--prefix"
       index += 1; opts.prefix = argv[index]
     elsif arg.length > 2 && arg[0, 2] == "-p"
@@ -111,9 +127,18 @@ end
 def format_paragraph(lines, opts)
   return lines if lines.empty?
 
-  # Detect common leading whitespace (indent)
-  indent = leading_whitespace(lines[0])
-  width = opts.width
+  # Crown margin (-c) and tagged paragraphs (-t) keep the first line's indent
+  # for the first output line and the second line's indent for the rest.
+  if opts.crown || opts.tagged
+    first_indent = leading_whitespace(lines[0])
+    rest_indent  = lines.length > 1 ? leading_whitespace(lines[1]) : first_indent
+  else
+    first_indent = leading_whitespace(lines[0])
+    rest_indent  = first_indent
+  end
+  indent = first_indent
+  # Fill toward the goal width when given, but never exceed the max width.
+  width = opts.goal.nil? ? opts.width : (opts.goal < opts.width ? opts.goal : opts.width)
 
   if opts.split_only
     # Just split long lines at word boundaries
@@ -144,34 +169,32 @@ def format_paragraph(lines, opts)
   end
 
   result = []
-  current = indent
+  line = first_indent
+  line_has_word = false
   i = 0
   while i < all_words.length
     word = all_words[i]
-    sep = ""
-    if current != indent
-      # Determine spacing
-      if opts.uniform
-        sep = " "
-      elsif i > 0 && ends_sentence?(all_words[i - 1])
-        sep = "  "
-      else
-        sep = " "
-      end
-    end
-
-    if current == indent
-      # First word on line
-      current += word
-    elsif current.length + sep.length + word.length <= width
-      current += sep + word
+    if !line_has_word
+      line += word
+      line_has_word = true
     else
-      result.push(current)
-      current = indent + word
+      sep = if opts.uniform
+        " "
+      elsif ends_sentence?(all_words[i - 1])
+        "  "
+      else
+        " "
+      end
+      if line.length + sep.length + word.length <= width
+        line += sep + word
+      else
+        result.push(line)
+        line = rest_indent + word
+      end
     end
     i += 1
   end
-  result.push(current) if current != indent
+  result.push(line) if line_has_word
   result
 end
 
@@ -179,7 +202,8 @@ def flush_para(para, opts)
   unless para.empty?
     format_paragraph(para, opts).each { |l| puts l }
   end
-  []
+  empty = []
+  empty
 end
 
 def process(content, opts)
@@ -208,7 +232,9 @@ def process(content, opts)
       puts ""
     else
       ind = leading_whitespace(line)
-      if in_para && ind != leading_whitespace(para[0] || "")
+      # With crown/tagged margins a differing indent is expected within a
+      # paragraph, so only an indent change splits paragraphs otherwise.
+      if in_para && !opts.crown && !opts.tagged && ind != leading_whitespace(para[0] || "")
         para = flush_para(para, opts)
         in_para = false
       end
@@ -224,11 +250,12 @@ files = ["-"] if files.empty?
 
 exit_code = 0
 files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "fmt: #{name}: No such file or directory"
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "fmt: #{cname}: No such file or directory"
     exit_code = 1; next
   end
-  content = (name == "-") ? STDIN.read : File.read(name)
+  content = (cname == "-") ? STDIN.read : File.read(cname)
   process(content, opts)
 end
 exit exit_code

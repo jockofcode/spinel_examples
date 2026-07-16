@@ -199,8 +199,9 @@ def line_head(content, opts)
 end
 
 def read_source(name)
-  return STDIN.read if name == "-"
-  File.read(name)
+  cname = "" + name
+  return STDIN.read if cname == "-"
+  File.read(cname)
 end
 
 opts, files = parse_argv(ARGV)
@@ -212,25 +213,26 @@ print_headers = (files.length > 1 || opts.verbose) && !opts.quiet
 exit_code = 0
 first = true
 files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "head: cannot open '#{name}' for reading: No such file or directory"
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "head: cannot open '#{cname}' for reading: No such file or directory"
     exit_code = 1
     next
   end
-  if name != "-" && File.directory?(name)
-    STDERR.puts "head: error reading '#{name}': Is a directory"
+  if cname != "-" && File.directory?(cname)
+    STDERR.puts "head: error reading '#{cname}': Is a directory"
     exit_code = 1
     next
   end
 
   if print_headers
     puts "" unless first
-    label = (name == "-") ? "standard input" : name
+    label = (cname == "-") ? "standard input" : cname
     puts "==> #{label} <=="
   end
   first = false
 
-  STDOUT.write(head_slice(read_source(name), opts))
+  STDOUT.write(head_slice(read_source(cname), opts))
 end
 
 exit exit_code

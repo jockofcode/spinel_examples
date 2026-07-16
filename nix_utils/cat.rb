@@ -165,8 +165,9 @@ end
 
 # Read the whole content of one source. "-" means standard input.
 def read_source(name)
-  return STDIN.read if name == "-"
-  File.read(name)
+  cname = "" + name
+  return STDIN.read if cname == "-"
+  File.read(cname)
 end
 
 # Emit one file's content under the active options. `state` carries the running
@@ -231,17 +232,18 @@ files = ["-"] if files.empty?
 exit_code = 0
 state = [0, false]                   # [line_number, prev_line_was_blank]
 files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "cat: #{name}: No such file or directory"
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "cat: #{cname}: No such file or directory"
     exit_code = 1
     next
   end
-  if name != "-" && File.directory?(name)
-    STDERR.puts "cat: #{name}: Is a directory"
+  if cname != "-" && File.directory?(cname)
+    STDERR.puts "cat: #{cname}: Is a directory"
     exit_code = 1
     next
   end
-  state = emit(read_source(name), opts, state)
+  state = emit(read_source(cname), opts, state)
 end
 
 exit exit_code

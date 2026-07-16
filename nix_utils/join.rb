@@ -40,7 +40,7 @@ USAGE = "Usage: join [OPTION]... FILE1 FILE2\n" \
 
 class JoinOptions
   attr_accessor :field1, :field2, :separator, :unpairable, :only_unpairable
-  attr_accessor :empty, :output_format, :ignore_case, :zero, :nocheck
+  attr_accessor :empty, :output_format, :ignore_case, :zero, :nocheck, :header
   def initialize
     @field1         = 1
     @field2         = 1
@@ -52,6 +52,7 @@ class JoinOptions
     @ignore_case    = false
     @zero           = false
     @nocheck        = false
+    @header         = false
   end
 end
 
@@ -86,6 +87,7 @@ def parse_argv(argv)
     if arg == "--help"; puts USAGE; exit 0; end
     if arg == "--nocheck-order"; opts.nocheck = true
     elsif arg == "--check-order"; opts.nocheck = false
+    elsif arg == "--header"; opts.header = true
     elsif arg == "-i" || arg == "--ignore-case"; opts.ignore_case = true
     elsif arg == "-z" || arg == "--zero-terminated"; opts.zero = true
     elsif arg == "-1"
@@ -165,7 +167,8 @@ def get_field(fields, n, empty)
 end
 
 def read_file_lines(name, opts)
-  content = (name == "-") ? STDIN.read : File.read(name)
+  cname = "" + name
+  content = (cname == "-") ? STDIN.read : File.read(cname)
   delim = opts.zero ? "\0" : "\n"
   if delim == "\n"
     lines = []
@@ -229,14 +232,15 @@ if files.length != 2
 end
 
 files.each do |f|
-  if f != "-" && !File.exist?(f)
-    STDERR.puts "join: #{f}: No such file or directory"
+  cf = "" + f
+  if cf != "-" && !File.exist?(cf)
+    STDERR.puts "join: #{cf}: No such file or directory"
     exit 1
   end
 end
 
-lines1 = read_file_lines(files[0], opts)
-lines2 = read_file_lines(files[1], opts)
+lines1 = read_file_lines("" + files[0], opts)
+lines2 = read_file_lines("" + files[1], opts)
 
 # Parse all lines into [key, fields] pairs
 records1 = []
@@ -253,6 +257,14 @@ lines2.each do |l|
   key = get_field(fields, opts.field2, "")
   key = key.downcase if opts.ignore_case
   records2.push([key, fields, l])
+end
+
+# --header: join and print the first line of each file verbatim, then continue
+# with the remaining records.
+if opts.header && records1.length > 0 && records2.length > 0
+  format_line(records1[0][1], records2[0][1], records1[0][0], opts)
+  records1 = records1[1, records1.length - 1]
+  records2 = records2[1, records2.length - 1]
 end
 
 show_joined = opts.only_unpairable.length == 0 ||

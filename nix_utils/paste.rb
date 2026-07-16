@@ -91,8 +91,9 @@ def parse_argv(argv)
 end
 
 def read_source(name)
-  return STDIN.read if name == "-"
-  File.read(name)
+  cname = "" + name
+  return STDIN.read if cname == "-"
+  File.read(cname)
 end
 
 def read_lines(name, line_delim)
@@ -111,8 +112,9 @@ delims     = opts.delimiters
 exit_code  = 0
 
 files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "paste: #{name}: No such file or directory"
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "paste: #{cname}: No such file or directory"
     exit_code = 1
   end
 end
@@ -120,16 +122,17 @@ end
 if opts.serial
   # -s: paste each file independently: all lines joined by cycling delimiters.
   files.each do |name|
-    next if name != "-" && !File.exist?(name)
-    lines = read_lines(name, line_delim)
+    cname = "" + name
+    next if cname != "-" && !File.exist?(cname)
+    lines = read_lines(cname, line_delim)
     result = ""
     i = 0
     while i < lines.length
-      result += lines[i]
+      result = result + lines[i]
       if i < lines.length - 1
-        result += delims[i % delims.length]
+        result = result + delims[i % delims.length]
       else
-        result += line_delim
+        result = result + line_delim
       end
       i += 1
     end
@@ -139,10 +142,11 @@ else
   # Parallel merge: read all files, then zip columns.
   all_lines = []
   files.each do |name|
-    if name != "-" && !File.exist?(name)
+    cname = "" + name
+    if cname != "-" && !File.exist?(cname)
       all_lines.push([])
     else
-      all_lines.push(read_lines(name, line_delim))
+      all_lines.push(read_lines(cname, line_delim))
     end
   end
 
@@ -161,8 +165,8 @@ else
     result = ""
     i = 0
     while i < parts.length
-      result += parts[i]
-      result += delims[i % delims.length] if i < parts.length - 1
+      result = result + parts[i]
+      result = result + delims[i % delims.length] if i < parts.length - 1
       i += 1
     end
     STDOUT.write(result + line_delim)

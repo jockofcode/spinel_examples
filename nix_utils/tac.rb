@@ -5,6 +5,7 @@
 #
 # Flags:
 #   -b, --before             attach the separator before instead of after
+#   -r, --regex              interpret the separator as a regular expression
 #   -s SEP, --separator=SEP  use SEP as the record separator instead of newline
 #   --help                   usage
 #
@@ -13,22 +14,26 @@
 #   ./bin/tac file.txt
 #   printf 'a\nb\nc\n' | ./bin/tac
 #   ./bin/tac -s, comma-records.txt
+#   printf 'a1b22c\n' | ./bin/tac -r -s '[0-9]+'
 #
-# Core Ruby only (File, STDIN, STDOUT, String, Array); no require gate needed.
+# Core Ruby only (File, STDIN, STDOUT, String, Array); the -r flag additionally
+# uses Regexp, matching grep.rb/od.rb (needs Spinel's regex support).
 # Runs unmodified under CRuby (`ruby nix_utils/tac.rb ...`).
 
 USAGE = "Usage: tac [OPTION]... [FILE]...\n" \
         "Write each FILE to standard output, last line first.\n" \
         "With no FILE, or when FILE is -, read standard input.\n" \
         "  -b         attach separator before instead of after\n" \
+        "  -r         interpret the separator as a regular expression\n" \
         "  -s SEP     use SEP as record separator instead of newline\n" \
         "  --help"
 
 class TacOptions
-  attr_accessor :before, :separator
+  attr_accessor :before, :separator, :regex
   def initialize
     @before = false
     @separator = "\n"
+    @regex = false
   end
 end
 
@@ -48,6 +53,8 @@ def parse_argv(argv)
       exit 0
     elsif arg == "-b" || arg == "--before"
       opts.before = true
+    elsif arg == "-r" || arg == "--regex"
+      opts.regex = true
     elsif arg == "-s" || arg == "--separator"
       index += 1
       if index >= argv.length
@@ -70,53 +77,76 @@ def parse_argv(argv)
 end
 
 def read_source(name)
-  return STDIN.read if name == "-"
-  File.read(name)
+  cname = "" + name
+  return STDIN.read if cname == "-"
+  File.read(cname)
 end
 
-# Split content into sep-terminated records. Each element in the returned array
-# includes its trailing separator, except possibly the last element (when the
-# content does not end with sep).
-def split_records(content, sep)
-  records = []
-  rest = content
-  sep_len = sep.length
-  while rest.length > 0
-    pos = rest.index(sep)
-    if pos.nil?
-      records.push(rest)
-      rest = ""
+# Break content into record bodies and the separators between them. Returns
+# [bodies, seps] where seps[i] is the separator that sits between bodies[i] and
+# bodies[i+1]. A trailing separator does not create a final empty record, which
+# matches GNU tac. When opts.regex is set the separator is a regular expression.
+def segment(content, opts)
+  bodies = []
+  seps   = []
+  rest   = content
+  re     = opts.regex ? Regexp.new(opts.separator) : nil
+  sep    = opts.separator
+  while true
+    if opts.regex
+      m = re.match(rest)
+      if m.nil?
+        bodies.push(rest)
+        break
+      end
+      pre  = m.pre_match.length
+      mlen = m[0].length
+      mlen = 1 if mlen == 0            # guard against zero-width matches
+      bodies.push(rest[0, pre])
+      seps.push(rest[pre, mlen])
+      rest = rest[pre + mlen, rest.length - pre - mlen]
     else
-      records.push(rest[0, pos + sep_len])
-      rest = rest[pos + sep_len, rest.length - pos - sep_len]
+      pos = rest.index(sep)
+      if pos.nil?
+        bodies.push(rest)
+        break
+      end
+      bodies.push(rest[0, pos])
+      seps.push(sep)
+      rest = rest[pos + sep.length, rest.length - pos - sep.length]
     end
   end
-  records
+  # Drop the empty trailing record produced when content ends with a separator.
+  bodies.pop if bodies.length > 0 && bodies.last == "" && bodies.length == seps.length + 1
+  [bodies, seps]
 end
 
 def tac_content(content, opts)
-  sep = opts.separator
-  if !opts.before
-    if sep == "\n"
-      return content.lines.reverse.join("")
-    end
-    split_records(content, sep).reverse.join("")
-  else
-    # --before: separator precedes each record. Split on sep to get the record
-    # bodies, then rejoin in reverse with sep in front.
-    parts = content.split(sep, -1)
-    parts.pop if !parts.empty? && parts.last == ""
-    result = ""
-    i = parts.length - 1
-    first = true
+  bodies, seps = segment(content, opts)
+  return "" if bodies.empty?
+
+  result = ""
+  last = bodies.length - 1
+  if opts.before
+    # The separator leads the record that follows it, so reversed output keeps
+    # each separator in front of the (now earlier) body it preceded.
+    result = result + bodies[last]
+    i = last - 1
     while i >= 0
-      result += sep unless first
-      first = false
-      result += parts[i]
+      result = result + seps[i] if i < seps.length
+      result = result + bodies[i]
       i -= 1
     end
-    result
+  else
+    # Default: the separator trails its own body.
+    i = last
+    while i >= 0
+      result = result + bodies[i]
+      result = result + seps[i] if i < seps.length
+      i -= 1
+    end
   end
+  result
 end
 
 opts, files = parse_argv(ARGV)
@@ -124,17 +154,18 @@ files = ["-"] if files.empty?
 
 exit_code = 0
 files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "tac: #{name}: No such file or directory"
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "tac: #{cname}: No such file or directory"
     exit_code = 1
     next
   end
-  if name != "-" && File.directory?(name)
-    STDERR.puts "tac: #{name}: Is a directory"
+  if cname != "-" && File.directory?(cname)
+    STDERR.puts "tac: #{cname}: Is a directory"
     exit_code = 1
     next
   end
-  STDOUT.write(tac_content(read_source(name), opts))
+  STDOUT.write(tac_content(read_source(cname), opts))
 end
 
 exit exit_code

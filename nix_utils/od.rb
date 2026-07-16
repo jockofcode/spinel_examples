@@ -48,8 +48,16 @@ USAGE = "Usage: od [OPTION]... [FILE]...\n" \
         "  -b/-c/-d/-o/-x/-s/-i  format shortcuts\n" \
         "  --help"
 
+class OdFormat
+  attr_accessor :type, :size
+  def initialize(type, size)
+    @type = type
+    @size = size
+  end
+end
+
 class OdOptions
-  attr_accessor :addr_radix, :skip, :count, :formats, :verbose, :width
+  attr_accessor :addr_radix, :skip, :count, :formats, :verbose, :width, :big_endian
   def initialize
     @addr_radix = "o"
     @skip       = 0
@@ -57,14 +65,9 @@ class OdOptions
     @formats    = []
     @verbose    = false
     @width      = 16
-  end
-end
-
-class OdFormat
-  attr_accessor :type, :size
-  def initialize(type, size)
-    @type = type
-    @size = size
+    @big_endian = false
+    @formats.push(OdFormat.new("o", 2))
+    @formats.pop
   end
 end
 
@@ -138,12 +141,18 @@ def parse_argv(argv)
     end
     if arg == "-v" || arg == "--output-duplicates"
       opts.verbose = true
+    elsif arg == "-a"
+      opts.formats.push(OdFormat.new("a", 1))
     elsif arg == "-b"
       opts.formats.push(OdFormat.new("o", 1))
     elsif arg == "-c"
       opts.formats.push(OdFormat.new("c", 1))
     elsif arg == "-d"
       opts.formats.push(OdFormat.new("u", 2))
+    elsif arg == "-f"
+      opts.formats.push(OdFormat.new("f", 4))
+    elsif arg == "-l"
+      opts.formats.push(OdFormat.new("d", 8))
     elsif arg == "-o"
       opts.formats.push(OdFormat.new("o", 2))
     elsif arg == "-x"
@@ -152,6 +161,10 @@ def parse_argv(argv)
       opts.formats.push(OdFormat.new("d", 2))
     elsif arg == "-i"
       opts.formats.push(OdFormat.new("d", 4))
+    elsif arg == "--endian=big"
+      opts.big_endian = true
+    elsif arg == "--endian=little"
+      opts.big_endian = false
     elsif arg == "-A" || arg == "--address-radix"
       index += 1
       opts.addr_radix = argv[index]
@@ -261,11 +274,12 @@ def format_byte_c(b)
   end
 end
 
-def int_from_bytes(bytes, offset, size, signed)
+def int_from_bytes(bytes, offset, size, signed, big_endian)
   val = 0
   i = 0
   while i < size && offset + i < bytes.length
-    val |= bytes[offset + i] << (i * 8)
+    shift = big_endian ? (size - 1 - i) * 8 : i * 8
+    val |= bytes[offset + i] << shift
     i += 1
   end
   if signed && size > 0
@@ -294,7 +308,77 @@ def to_hex_str(n)
   neg ? "-" + digits : digits
 end
 
-def format_chunk(bytes, offset, size, fmt)
+def pow10(n)
+  r = 1
+  i = 0
+  while i < n
+    r *= 10
+    i += 1
+  end
+  r
+end
+
+# Format a float in scientific notation with the given number of fractional
+# digits, e.g. 1.0 -> "1.0000000e+00".
+def format_sci(val, digits)
+  neg = val < 0.0
+  v = neg ? -val : val
+  exp10 = 0
+  if v != 0.0
+    while v >= 10.0
+      v /= 10.0; exp10 += 1
+    end
+    while v < 1.0
+      v *= 10.0; exp10 -= 1
+    end
+  end
+  scale = pow10(digits)
+  r = (v * scale + 0.5).to_i
+  if r >= 10 * scale
+    r /= 10
+    exp10 += 1
+  end
+  s = r.to_s
+  while s.length < digits + 1
+    s = "0" + s
+  end
+  intp = s[0, s.length - digits]
+  frac = s[s.length - digits, digits]
+  eabs = exp10 < 0 ? -exp10 : exp10
+  estr = eabs.to_s
+  estr = "0" + estr if estr.length < 2
+  mant = digits > 0 ? intp + "." + frac : intp
+  (neg ? "-" : "") + mant + "e" + (exp10 < 0 ? "-" : "+") + estr
+end
+
+# Decode IEEE-754 bits (4 or 8 bytes) into a formatted string.
+def decode_float(bits, size)
+  if size == 4
+    sign = (bits >> 31) & 1
+    exp  = (bits >> 23) & 255
+    frac = bits & 8388607          # 2^23 - 1
+    ebits = 255; bias = 127; fbits = 23
+  else
+    sign = (bits >> 63) & 1
+    exp  = (bits >> 52) & 2047
+    frac = bits & ((1 << 52) - 1)
+    ebits = 2047; bias = 1023; fbits = 52
+  end
+  if exp == ebits
+    return "nan" if frac != 0
+    return sign == 1 ? "-inf" : "inf"
+  end
+  if exp == 0
+    return sign == 1 ? "-0" : "0" if frac == 0
+    val = (frac.to_f / (1 << fbits)) * (2.0 ** (1 - bias))
+  else
+    val = (1.0 + frac.to_f / (1 << fbits)) * (2.0 ** (exp - bias))
+  end
+  val = -val if sign == 1
+  format_sci(val, size == 4 ? 7 : 16)
+end
+
+def format_chunk(bytes, offset, size, fmt, big_endian)
   width = if fmt.type == "a" || fmt.type == "c"; 3
            elsif fmt.size == 1 && fmt.type == "o"; 3
            elsif fmt.size == 1 && fmt.type == "x"; 2
@@ -314,17 +398,21 @@ def format_chunk(bytes, offset, size, fmt)
   elsif fmt.type == "c"
     format_byte_c(bytes[offset]).rjust(width)
   elsif fmt.type == "o"
-    n = int_from_bytes(bytes, offset, fmt.size, false)
+    n = int_from_bytes(bytes, offset, fmt.size, false, big_endian)
     to_oct_str(n).rjust(width, "0")
   elsif fmt.type == "x"
-    n = int_from_bytes(bytes, offset, fmt.size, false)
+    n = int_from_bytes(bytes, offset, fmt.size, false, big_endian)
     to_hex_str(n).rjust(width, "0")
   elsif fmt.type == "u"
-    n = int_from_bytes(bytes, offset, fmt.size, false)
+    n = int_from_bytes(bytes, offset, fmt.size, false, big_endian)
     n.to_s.rjust(width)
   elsif fmt.type == "d"
-    n = int_from_bytes(bytes, offset, fmt.size, true)
+    n = int_from_bytes(bytes, offset, fmt.size, true, big_endian)
     n.to_s.rjust(width)
+  elsif fmt.type == "f"
+    bits = int_from_bytes(bytes, offset, fmt.size, false, big_endian)
+    fwidth = fmt.size == 4 ? 15 : 24
+    decode_float(bits, fmt.size).rjust(fwidth)
   else
     "?"
   end
@@ -380,7 +468,7 @@ def dump_data(data, opts)
         take = fmt.size < avail ? fmt.size : avail
         padded = row_bytes[pos, take]
         while padded.length < fmt.size; padded.push(0); end
-        line += " " + format_chunk(padded, 0, fmt.size, fmt)
+        line += " " + format_chunk(padded, 0, fmt.size, fmt, opts.big_endian)
         pos += fmt.size
       end
       puts line
@@ -400,12 +488,13 @@ files = ["-"] if files.empty?
 data = ""
 exit_code = 0
 files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "od: #{name}: No such file or directory"
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "od: #{cname}: No such file or directory"
     exit_code = 1
     next
   end
-  data += (name == "-") ? STDIN.read : File.read(name)
+  data = data + ((cname == "-") ? STDIN.read : File.read(cname))
 end
 
 # Apply -j skip and -N count

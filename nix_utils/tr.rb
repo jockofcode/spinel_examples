@@ -13,6 +13,7 @@
 #                           that is listed in the last specified SET with a
 #                           single occurrence of that character
 #   -c, -C, --complement  use the complement of SET1
+#   -t, --truncate-set1   first truncate SET1 to the length of SET2
 #   --help              usage
 #
 # SET syntax:
@@ -31,14 +32,15 @@
 USAGE = "Usage: tr [OPTION]... SET1 [SET2]\n" \
         "Translate, squeeze, or delete characters from standard input.\n" \
         "  -d  delete chars in SET1   -s  squeeze repeated chars\n" \
-        "  -c/-C  complement SET1     --help"
+        "  -c/-C  complement SET1     -t  truncate SET1   --help"
 
 class TrOptions
-  attr_accessor :delete, :squeeze, :complement
+  attr_accessor :delete, :squeeze, :complement, :truncate
   def initialize
     @delete     = false
     @squeeze    = false
     @complement = false
+    @truncate   = false
   end
 end
 
@@ -61,6 +63,8 @@ def parse_argv(argv)
       opts.squeeze = true
     elsif arg == "-c" || arg == "-C" || arg == "--complement"
       opts.complement = true
+    elsif arg == "-t" || arg == "--truncate-set1"
+      opts.truncate = true
     elsif arg.length > 1 && arg[0] == "-"
       # Combined short flags: -ds, -dc, etc.
       i = 1
@@ -70,6 +74,7 @@ def parse_argv(argv)
         if c == "d";         opts.delete     = true
         elsif c == "s";      opts.squeeze    = true
         elsif c == "c" || c == "C"; opts.complement = true
+        elsif c == "t";      opts.truncate   = true
         else valid = false; break
         end
         i += 1
@@ -103,7 +108,7 @@ def decode_escape(str, i)
     digits = ""
     scan = i + 2
     while scan < str.length && digits.length < 2 && "0123456789abcdefABCDEF".include?(str[scan])
-      digits += str[scan]
+      digits = digits + str[scan]
       scan += 1
     end
     ch = digits == "" ? "x" : digits.to_i(16).chr
@@ -113,7 +118,7 @@ def decode_escape(str, i)
     digits = ""
     scan = i + 1
     while scan < str.length && digits.length < 3 && "01234567".include?(str[scan])
-      digits += str[scan]
+      digits = digits + str[scan]
       scan += 1
     end
     return [digits.to_i(8).chr, scan]
@@ -249,8 +254,10 @@ elsif opts.squeeze && set2_raw.empty?
   STDOUT.write(result)
 
 else
-  # Translate (and optionally squeeze the result).
-  table = build_table(set1, set2_raw)
+  # Translate (and optionally squeeze the result). With -t, SET1 is truncated to
+  # the length of SET2 so any extra SET1 characters are left unchanged.
+  set1_for_table = opts.truncate ? set1[0, set2_raw.length] : set1
+  table = build_table(set1_for_table, set2_raw)
 
   sq_set = {}
   if opts.squeeze
@@ -266,7 +273,7 @@ else
     if opts.squeeze && sq_set[out_c] && out_c == prev
       # skip squeeze duplicate
     else
-      result += out_c
+      result = result + out_c
       prev = out_c
     end
     i += 1

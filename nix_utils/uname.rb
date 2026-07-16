@@ -107,7 +107,9 @@ def read_proc_info
     ver_line = File.read("/proc/version").chomp
     info[:version] = ver_line
     m = Regexp.new(' version (\S+)').match(ver_line)
-    info[:release] = m[1] if m && info[:release] == ""
+    if m
+      info[:release] = "" + m[1].to_s if info[:release] == ""
+    end
   end
   if File.exist?("/proc/sys/kernel/version")
     info[:version] = File.read("/proc/sys/kernel/version").chomp

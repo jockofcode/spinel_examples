@@ -132,9 +132,14 @@ if opts.input_range
     n += 1
   end
 elsif opts.echo_mode
-  lines = args
+  args.each { |a| lines.push("" + a) }
 else
-  files = args.empty? ? ["-"] : args
+  files = []
+  if args.empty?
+    files.push("-")
+  else
+    args.each { |a| files.push("" + a) }
+  end
   files.each do |name|
     if name != "-" && !File.exist?(name)
       STDERR.puts "shuf: #{name}: No such file or directory"

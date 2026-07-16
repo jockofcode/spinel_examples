@@ -94,30 +94,28 @@ def next_stop(col, opts)
   end
 end
 
+def flush_spaces_helper(result, col, space_start_col, opts)
+  end_col = col
+  c = space_start_col
+  while true
+    ns = next_stop(c, opts)
+    break if ns > end_col
+    result = result + "\t"
+    c = ns
+  end
+  while c < end_col
+    result = result + " "
+    c += 1
+  end
+  result
+end
+
 def unexpand_line(line, opts)
   result = ""
   col = 0
   space_run = 0
   space_start_col = 0
   in_leading = true
-
-  flush_spaces = lambda do
-    # Convert accumulated spaces to tabs+spaces
-    end_col = col
-    c = space_start_col
-    while true
-      ns = next_stop(c, opts)
-      break if ns > end_col
-      result += "\t"
-      c = ns
-    end
-    # Remaining spaces that don't reach a stop
-    while c < end_col
-      result += " "
-      c += 1
-    end
-    space_run = 0
-  end
 
   i = 0
   while i < line.length
@@ -130,16 +128,17 @@ def unexpand_line(line, opts)
       col += 1
     else
       if space_run > 0
-        flush_spaces.call
+        result = flush_spaces_helper(result, col, space_start_col, opts)
+        space_run = 0
       end
       if ch == "\t"
         stop = next_stop(col, opts)
         in_leading = false if !opts.all_spaces && col > 0 && result.length > 0
-        result += "\t"
+        result = result + "\t"
         col = stop
       else
         in_leading = false if ch != " "
-        result += ch
+        result = result + ch
         col += 1
       end
       space_run = 0
@@ -147,7 +146,7 @@ def unexpand_line(line, opts)
     i += 1
   end
   if space_run > 0
-    flush_spaces.call
+    result = flush_spaces_helper(result, col, space_start_col, opts)
   end
   result
 end
@@ -166,12 +165,13 @@ files = ["-"] if files.empty?
 
 exit_code = 0
 files.each do |name|
-  if name != "-" && !File.exist?(name)
-    STDERR.puts "unexpand: #{name}: No such file or directory"
+  cname = "" + name
+  if cname != "-" && !File.exist?(cname)
+    STDERR.puts "unexpand: #{cname}: No such file or directory"
     exit_code = 1
     next
   end
-  content = (name == "-") ? STDIN.read : File.read(name)
+  content = (cname == "-") ? STDIN.read : File.read(cname)
   process(content, opts)
 end
 exit exit_code

@@ -11,8 +11,10 @@
 #   -3           suppress column 3 (lines common to both)
 #   -i           case-insensitive comparison
 #   -z           NUL-terminated input/output
+#   --check-order    check that the input is correctly sorted
 #   --nocheck-order  do not check that input is sorted
 #   --output-delimiter=STR  use STR instead of TAB between columns
+#   --total      output a summary of column counts
 #   --help       usage
 #
 # Compile: spinel nix_utils/comm.rb -o nix_utils/bin/comm
@@ -37,7 +39,7 @@ USAGE = "Usage: comm [OPTION]... FILE1 FILE2\n" \
 
 class CommOptions
   attr_accessor :suppress1, :suppress2, :suppress3
-  attr_accessor :ignore_case, :zero, :nocheck, :delim
+  attr_accessor :ignore_case, :zero, :nocheck, :delim, :total
   def initialize
     @suppress1   = false
     @suppress2   = false
@@ -46,6 +48,7 @@ class CommOptions
     @zero        = false
     @nocheck     = false
     @delim       = "\t"
+    @total       = false
   end
 end
 
@@ -67,6 +70,8 @@ def parse_argv(argv)
       exit 0
     elsif arg == "--nocheck-order" || arg == "--check-order"
       opts.nocheck = (arg == "--nocheck-order")
+    elsif arg == "--total"
+      opts.total = true
     elsif arg.length > 20 && arg[0, 20] == "--output-delimiter="
       opts.delim = arg[20, arg.length - 20]
     elsif arg == "--output-delimiter"
@@ -105,7 +110,8 @@ def parse_argv(argv)
 end
 
 def read_lines(name, opts)
-  content = (name == "-") ? STDIN.read : File.read(name)
+  cname = "" + name
+  content = (cname == "-") ? STDIN.read : File.read(cname)
   delim = opts.zero ? "\0" : "\n"
   if delim == "\n"
     lines = content.lines.map { |l| l.end_with?("\n") ? l[0, l.length - 1] : l }
@@ -128,19 +134,23 @@ if files.length != 2
   exit 1
 end
 
-[files[0], files[1]].each do |f|
-  if f != "-" && !File.exist?(f)
-    STDERR.puts "comm: #{f}: No such file or directory"
+files.each do |f|
+  cf = "" + f
+  if cf != "-" && !File.exist?(cf)
+    STDERR.puts "comm: #{cf}: No such file or directory"
     exit 1
   end
 end
 
-lines1 = read_lines(files[0], opts)
-lines2 = read_lines(files[1], opts)
+lines1 = read_lines("" + files[0], opts)
+lines2 = read_lines("" + files[1], opts)
 
 i = 0
 j = 0
 term = opts.zero ? "\0" : "\n"
+count1 = 0
+count2 = 0
+count3 = 0
 
 while i < lines1.length || j < lines2.length
   l1 = i < lines1.length ? lines1[i] : nil
@@ -148,6 +158,7 @@ while i < lines1.length || j < lines2.length
 
   if l1.nil?
     # FILE1 exhausted: rest of FILE2 is unique to FILE2
+    count2 += 1
     unless opts.suppress2
       prefix = opts.suppress1 ? "" : opts.delim
       STDOUT.write(prefix + l2 + term)
@@ -155,6 +166,7 @@ while i < lines1.length || j < lines2.length
     j += 1
   elsif l2.nil?
     # FILE2 exhausted: rest of FILE1 is unique to FILE1
+    count1 += 1
     unless opts.suppress1
       STDOUT.write(l1 + term)
     end
@@ -165,12 +177,14 @@ while i < lines1.length || j < lines2.length
 
     if k1 < k2
       # l1 is unique to FILE1
+      count1 += 1
       unless opts.suppress1
         STDOUT.write(l1 + term)
       end
       i += 1
     elsif k1 > k2
       # l2 is unique to FILE2
+      count2 += 1
       unless opts.suppress2
         prefix = opts.suppress1 ? "" : opts.delim
         STDOUT.write(prefix + l2 + term)
@@ -178,6 +192,7 @@ while i < lines1.length || j < lines2.length
       j += 1
     else
       # common
+      count3 += 1
       unless opts.suppress3
         prefix = ""
         prefix += opts.delim unless opts.suppress1
@@ -188,4 +203,9 @@ while i < lines1.length || j < lines2.length
       j += 1
     end
   end
+end
+
+if opts.total
+  STDOUT.write(count1.to_s + opts.delim + count2.to_s + opts.delim +
+               count3.to_s + opts.delim + "total" + term)
 end

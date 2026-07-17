@@ -419,6 +419,15 @@ Spinel examples should not assume these exist unless probed:
   `symlink?`, `setuid?`, `setgid?`, `sticky?`
 - Mutators: `chmod`, `chown`, `lchmod`, `lchown`, `link`, `symlink`, `rename`,
   `truncate`, `utime`, `lutime`, `mkfifo`, `umask`
+- `File.stat`, `File.lstat`, `File.readlink`
+
+**FFI workaround available for several of these.** The `nix_utils/` directory
+contains `sp_file_ext.c` + `file_ext.rb` which provide a `FileExt` module with
+confirmed-working `native_func` bindings for `readlink`, `symlink`, `link`,
+`chmod`, `stat_str` (stat fields as a space-separated string), `lstat_str`, and
+`utime_c`. These use POSIX syscalls directly with no subprocess overhead. See
+`notes/ffi_and_require_reference.md` — the "Confirmed constraints" section —
+for the key rules (module-only, `--link` before `-E`, etc.).
 
 ### File Methods Known to Be Useful
 

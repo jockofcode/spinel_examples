@@ -132,6 +132,142 @@ Keep this style only when the lesson is raw FFI. For practical examples, prefer
 the `lib/socket_shim.rb` compatibility layer because it hides sockaddr packing
 and keeps the example source close to CRuby.
 
+## `native_func` vs `ffi_func` — Confirmed Working API
+
+> **Important:** The `ffi_func` name used elsewhere in this document reflects
+> earlier planning notes. The DSL confirmed to actually work (tested end-to-end
+> in `nix_utils/`) is **`native_func`**. The sections below have not been fully
+> updated; treat any `ffi_func` reference as `native_func` until the note is
+> revised.
+
+### Confirmed constraints (verified in `nix_utils/file_ext.rb` + `sp_file_ext.c`)
+
+**1. Use user-defined modules, not built-in class reopenings.**
+
+`native_func` only registers a binding when it appears in a user-defined module
+or class. Reopening a built-in class like `File` does not work — the compiler
+does not wire up the binding and later calls produce "unsupported call" errors.
+
+```ruby
+# FAILS — File is a built-in class:
+class File
+  native_func :readlink, [:string], :string, "sp_file_readlink"
+end
+
+# WORKS — FileExt is a new user module:
+module FileExt
+  native_func :readlink, [:string], :string, "sp_file_readlink"
+end
+```
+
+**2. `--link` must come before `-E`.**
+
+When using compile-and-run mode, the flag order matters:
+
+```sh
+# WRONG (--link after -E is not seen by the linker step):
+spinel -E tool.rb --link sp_file_ext.o
+
+# CORRECT:
+spinel --link sp_file_ext.o -E tool.rb
+spinel --link sp_file_ext.o -E tool.rb arg1 arg2   # ARGV still works
+```
+
+**3. Spinel does not eliminate dead branches.**
+
+Even when a condition is statically determinable, Spinel compiles both branches
+and type-checks both. Unsupported calls in a "dead" branch still fail.
+
+```ruby
+if RUBY_DESCRIPTION == "spinel"   # true in Spinel
+  puts "spinel"
+else
+  File.stat("/tmp")  # STILL causes "unsupported call" compile error
+end
+```
+
+There is no way to hide CRuby-only code from the Spinel compiler using `if`,
+`unless`, or `case`. The only safe approach is to write fallback defs whose
+bodies use only Spinel-compatible operations.
+
+**4. Detecting Spinel at compile time.**
+
+`RUBY_ENGINE` is `"ruby"` in both CRuby and Spinel. The correct constant is
+`RUBY_DESCRIPTION`:
+
+```ruby
+RUBY_DESCRIPTION  # => "spinel" under Spinel, "ruby 3.x.y ..." under CRuby
+```
+
+**5. Dual-runtime `native_func` modules (CRuby + Spinel from one file).**
+
+The trick: define `def self.native_func(*args); end` as a no-op inside the
+module. Spinel ignores this def and uses its built-in directive semantics;
+CRuby calls the no-op (which does nothing, leaving any CRuby fallback defs in
+effect). Provide fallback defs using only backtick/system/basic-op bodies that
+Spinel can type-check but native_func overrides at every call site.
+
+```ruby
+module FileExt
+  def self.native_func(*args); end   # CRuby no-op; Spinel ignores it
+
+  native_func :readlink, [:string], :string, "sp_file_readlink"
+
+  # Spinel: native_func wins; this def is compiled but never called.
+  # CRuby:  this def is what actually runs.
+  def self.readlink(path)
+    cpath = "" + path
+    raw = "" + `/usr/bin/stat -f '%Y' '#{cpath}' 2>/dev/null`
+    "" + raw.chomp
+  end
+end
+```
+
+**6. `native_func` type specs confirmed working.**
+
+| Spec | C type | Notes |
+|---|---|---|
+| `:string` | `const char *` | GC-heap string; use `sp_str_alloc_raw` in the C function to return a managed string |
+| `:cstring` | `const char *` | Static buffer — codegen dup-copies to GC heap before the next call can clobber it |
+| `:int` | `mrb_int` (int64_t) | |
+| `:bool` | `mrb_bool` (int) | |
+| `:any` | `sp_RbVal` | Polymorphic boxed value |
+| `:nil` | `void` | Return type only |
+
+Multiple arguments are declared as `[:type, :type, ...]`.
+
+**7. Writing C that returns GC strings.**
+
+Include the stable ABI header (not the internal `sp_runtime.h`):
+
+```c
+#include "spinel/runtime.h"   /* sp_str_alloc_raw, sp_str_set_len */
+```
+
+Compile with `-I $SPINEL_LIB/lib` where
+`SPINEL_LIB=~/.asdf/installs/spinel/master/lib/spinel`.
+
+```c
+const char *sp_file_readlink(const char *path) {
+    char buf[4096];
+    ssize_t n = readlink(path, buf, sizeof(buf) - 1);
+    if (n < 0) return sp_str_alloc(0);   /* empty string */
+    buf[n] = '\0';
+    char *s = sp_str_alloc_raw((size_t)n + 1);
+    memcpy(s, buf, (size_t)n + 1);
+    sp_str_set_len(s, (size_t)n);
+    return s;
+}
+```
+
+**Reference implementation:** `nix_utils/sp_file_ext.c` (C) and
+`nix_utils/file_ext.rb` (Ruby bindings + CRuby fallbacks). The `FileExt`
+module provides `readlink`, `symlink`, `link`, `chmod`, `stat_str`,
+`lstat_str`, and `utime_c`. The test suite in `tests/nix_utils_test.sh`
+auto-compiles `sp_file_ext.o` and adds `--link` to every Spinel invocation.
+
+---
+
 ## Bringing Your Own C (custom native code + `--link`)
 
 Everything above binds symbols that already exist in the Spinel runtime

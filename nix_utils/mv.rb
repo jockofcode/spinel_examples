@@ -101,33 +101,39 @@ def parse_argv(argv)
 end
 
 def move_file(src, dst, opts)
-  if opts.update && File.exist?(dst)
-    return if File.stat(src).mtime <= File.stat(dst).mtime
-  end
-  if opts.no_clobber && File.exist?(dst)
+  csrc = "" + src
+  cdst = "" + dst
+  if opts.update && File.exist?(cdst)
+    # File.stat.mtime not available in Spinel; delegate timestamp check to system mv -u.
+    system("/bin/mv -u " + csrc + " " + cdst)
     return
   end
-  if opts.interactive && File.exist?(dst) && !opts.force
-    STDERR.write("mv: overwrite '#{dst}'? ")
+  if opts.no_clobber && File.exist?(cdst)
+    return
+  end
+  if opts.interactive && File.exist?(cdst) && !opts.force
+    STDERR.write("mv: overwrite '#{cdst}'? ")
     ans = STDIN.gets
     return unless ans && ans.strip.downcase == "y"
   end
-  File.rename(src, dst)
-  puts "renamed '#{src}' -> '#{dst}'" if opts.verbose
+  File.rename(csrc, cdst)
+  puts "renamed '#{csrc}' -> '#{cdst}'" if opts.verbose
 end
 
 opts, args = parse_argv(ARGV)
 
+raw_dest = ""
 if opts.target_dir
   sources = args
-  dest = opts.target_dir
+  raw_dest = "" + opts.target_dir
 elsif args.length < 2
   STDERR.puts "mv: missing file operand"
   exit 1
 else
   sources = args[0, args.length - 1]
-  dest = args.last
+  raw_dest = "" + args.last
 end
+dest = raw_dest
 
 exit_code = 0
 
@@ -137,21 +143,22 @@ if sources.length > 1 || (File.exist?(dest) && File.directory?(dest))
     exit 1
   end
   sources.each do |src|
-    unless File.exist?(src)
-      STDERR.puts "mv: cannot stat '#{src}': No such file or directory"
+    csrc = "" + src
+    unless File.exist?(csrc)
+      STDERR.puts "mv: cannot stat '#{csrc}': No such file or directory"
       exit_code = 1
       next
     end
-    dst = dest + "/" + File.basename(src)
-    move_file(src, dst, opts)
+    dst = dest + "/" + File.basename(csrc)
+    move_file(csrc, dst, opts)
   end
 else
-  src = sources[0]
-  unless File.exist?(src)
-    STDERR.puts "mv: cannot stat '#{src}': No such file or directory"
+  csrc = "" + sources[0]
+  unless File.exist?(csrc)
+    STDERR.puts "mv: cannot stat '#{csrc}': No such file or directory"
     exit 1
   end
-  move_file(src, dest, opts)
+  move_file(csrc, dest, opts)
 end
 
 exit exit_code

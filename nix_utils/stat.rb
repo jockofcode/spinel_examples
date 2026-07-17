@@ -78,125 +78,135 @@ def parse_argv(argv)
   [opts, files]
 end
 
-def mode_to_octal(mode)
-  (mode & 0o7777).to_s(8)
-end
+# File.stat / File.lstat are not in the Spinel runtime.
+# StatInfo wraps data from /usr/bin/stat -f on macOS.
 
-MODE_BIT_DEFS = [[0o400, "r"], [0o200, "w"], [0o100, "x"],
-                 [0o040, "r"], [0o020, "w"], [0o010, "x"],
-                 [0o004, "r"], [0o002, "w"], [0o001, "x"]]
-
-def mode_to_string(mode, ftype)
-  type_char = if ftype == "regular file"; "-"
-  elsif ftype == "directory"; "d"
-  elsif ftype == "symbolic link"; "l"
-  elsif ftype == "block special file"; "b"
-  elsif ftype == "character special file"; "c"
-  elsif ftype == "socket"; "s"
-  elsif ftype == "FIFO"; "p"
-  else "?"
-  end
-  bits = ""
-  MODE_BIT_DEFS.each do |pair|
-    bits += (mode & pair[0]) != 0 ? pair[1] : "-"
-  end
-  # setuid/setgid/sticky
-  bits[2] = (mode & 0o4000) != 0 ? ((mode & 0o100) != 0 ? "s" : "S") : bits[2]
-  bits[5] = (mode & 0o2000) != 0 ? ((mode & 0o010) != 0 ? "s" : "S") : bits[5]
-  bits[8] = (mode & 0o1000) != 0 ? ((mode & 0o001) != 0 ? "t" : "T") : bits[8]
-  type_char + bits
-end
-
-def file_type_str(stat)
-  if stat.file?; "regular file"
-  elsif stat.directory?; "directory"
-  elsif stat.symlink?; "symbolic link"
-  elsif stat.blockdev?; "block special file"
-  elsif stat.chardev?; "character special file"
-  elsif stat.socket?; "socket"
-  elsif stat.pipe?; "FIFO"
-  else "unknown"
+class StatInfo
+  attr_accessor :mode_str, :mode_hex, :nlinks, :uid, :gid, :size, :blocks, :ino, :dev, :uname, :gname, :atime_ep, :mtime_ep, :ctime_ep, :ftype
+  def initialize
+    @mode_str  = "-rw-r--r--"
+    @mode_hex  = "81a4"
+    @nlinks    = 1
+    @uid       = 0
+    @gid       = 0
+    @size      = 0
+    @blocks    = 0
+    @ino       = 0
+    @dev       = 0
+    @uname     = "?"
+    @gname     = "?"
+    @atime_ep  = "0"
+    @mtime_ep  = "0"
+    @ctime_ep  = "0"
+    @ftype     = "regular file"
   end
 end
 
-def time_str(t)
-  # Format: 2024-01-15 10:30:45.123456789 +0000
-  y  = t.year.to_s.rjust(4, "0")
-  mo = t.month.to_s.rjust(2, "0")
-  d  = t.day.to_s.rjust(2, "0")
-  h  = t.hour.to_s.rjust(2, "0")
-  mi = t.min.to_s.rjust(2, "0")
-  s  = t.sec.to_s.rjust(2, "0")
-  ns = (t.nsec).to_s.rjust(9, "0")
-  off = t.utc_offset
-  sign = off >= 0 ? "+" : "-"
-  off = off.abs
-  oh = (off / 3600).to_s.rjust(2, "0")
-  om = ((off % 3600) / 60).to_s.rjust(2, "0")
-  "#{y}-#{mo}-#{d} #{h}:#{mi}:#{s}.#{ns} #{sign}#{oh}#{om}"
-end
-
-def lookup_name_for_uid(uid)
-  if File.exist?("/etc/passwd")
-    File.read("/etc/passwd").lines.each do |line|
-      parts = line.chomp.split(":")
-      return parts[0] if parts.length >= 3 && parts[2].to_i == uid
-    end
+def get_stat_info(path, follow)
+  info = StatInfo.new
+  flag = follow ? "-L " : ""
+  raw = "" + `/usr/bin/stat #{flag}-f '%Sp %l %u %g %z %b %i %d %Xp %Su %Sg %a %m %c' '#{path}' 2>/dev/null`
+  craw = "" + raw.chomp
+  parts = craw.split(" ")
+  if parts.length >= 14
+    info.mode_str = "" + parts[0]
+    info.nlinks   = parts[1].to_i
+    info.uid      = parts[2].to_i
+    info.gid      = parts[3].to_i
+    info.size     = parts[4].to_i
+    info.blocks   = parts[5].to_i
+    info.ino      = parts[6].to_i
+    info.dev      = parts[7].to_i
+    info.mode_hex = "" + parts[8]
+    info.uname    = "" + parts[9]
+    info.gname    = "" + parts[10]
+    info.atime_ep = "" + parts[11]
+    info.mtime_ep = "" + parts[12]
+    info.ctime_ep = "" + parts[13]
   end
-  uid.to_s
-end
-
-def lookup_name_for_gid(gid)
-  if File.exist?("/etc/group")
-    File.read("/etc/group").lines.each do |line|
-      parts = line.chomp.split(":")
-      return parts[0] if parts.length >= 3 && parts[2].to_i == gid
-    end
+  tc = info.mode_str.length > 0 ? info.mode_str[0] : "-"
+  info.ftype = if tc == "d"; "directory"
+  elsif tc == "l"; "symbolic link"
+  elsif tc == "b"; "block special file"
+  elsif tc == "c"; "character special file"
+  elsif tc == "p"; "FIFO"
+  elsif tc == "s"; "socket"
+  else "regular file"
   end
-  gid.to_s
+  info
 end
 
-def apply_format(fmt, name, st, ftype, opts)
+def mode_to_octal_from_hex(hex_str)
+  (hex_str.to_i(16) & 0o7777).to_s(8)
+end
+
+def mode_to_string_from_int(mode)
+  type_char = if (mode & 0o170000) == 0o040000; "d"
+  elsif (mode & 0o170000) == 0o120000; "l"
+  elsif (mode & 0o170000) == 0o060000; "b"
+  elsif (mode & 0o170000) == 0o020000; "c"
+  elsif (mode & 0o170000) == 0o010000; "p"
+  elsif (mode & 0o170000) == 0o140000; "s"
+  else "-"
+  end
+  r1 = (mode & 0o400) != 0 ? "r" : "-"
+  w1 = (mode & 0o200) != 0 ? "w" : "-"
+  x1 = (mode & 0o4000) != 0 ? ((mode & 0o100) != 0 ? "s" : "S") : ((mode & 0o100) != 0 ? "x" : "-")
+  r2 = (mode & 0o040) != 0 ? "r" : "-"
+  w2 = (mode & 0o020) != 0 ? "w" : "-"
+  x2 = (mode & 0o2000) != 0 ? ((mode & 0o010) != 0 ? "s" : "S") : ((mode & 0o010) != 0 ? "x" : "-")
+  r3 = (mode & 0o004) != 0 ? "r" : "-"
+  w3 = (mode & 0o002) != 0 ? "w" : "-"
+  x3 = (mode & 0o1000) != 0 ? ((mode & 0o001) != 0 ? "t" : "T") : ((mode & 0o001) != 0 ? "x" : "-")
+  type_char + r1 + w1 + x1 + r2 + w2 + x2 + r3 + w3 + x3
+end
+
+def time_str_from_epoch(epoch_s)
+  raw = "" + `/bin/date -r #{epoch_s} '+%Y-%m-%d %H:%M:%S.000000000 %z' 2>/dev/null`
+  "" + raw.chomp
+end
+
+def apply_format(fmt, cname, info)
   result = ""
   i = 0
+  mode_int = info.mode_hex.to_i(16)
   while i < fmt.length
     if fmt[i] == "%" && i + 1 < fmt.length
       i += 1
-      directive = fmt[i]
-      val = case directive
-      when "n" then name
-      when "N" then "'" + name + "'"
-      when "s" then st.size.to_s
-      when "b" then st.blocks.to_s
-      when "B" then "512"
-      when "f" then (st.mode & 0xFFFF).to_s(16)
-      when "F" then ftype
-      when "u" then st.uid.to_s
-      when "U" then lookup_name_for_uid(st.uid)
-      when "g" then st.gid.to_s
-      when "G" then lookup_name_for_gid(st.gid)
-      when "i" then st.ino.to_s
-      when "h" then st.nlink.to_s
-      when "a" then mode_to_octal(st.mode)
-      when "A" then mode_to_string(st.mode, ftype)
-      when "d" then st.dev.to_s
-      when "x" then time_str(st.atime)
-      when "y" then time_str(st.mtime)
-      when "z" then time_str(st.ctime)
-      when "%" then "%"
-      else "?" + directive
+      d = fmt[i]
+      val = if d == "n"; cname
+      elsif d == "N"; "'" + cname + "'"
+      elsif d == "s"; info.size.to_s
+      elsif d == "b"; info.blocks.to_s
+      elsif d == "B"; "512"
+      elsif d == "f"; info.mode_hex
+      elsif d == "F"; info.ftype
+      elsif d == "u"; info.uid.to_s
+      elsif d == "U"; info.uname
+      elsif d == "g"; info.gid.to_s
+      elsif d == "G"; info.gname
+      elsif d == "i"; info.ino.to_s
+      elsif d == "h"; info.nlinks.to_s
+      elsif d == "a"; mode_to_octal_from_hex(info.mode_hex)
+      elsif d == "A"; mode_to_string_from_int(mode_int)
+      elsif d == "d"; info.dev.to_s
+      elsif d == "x"; time_str_from_epoch(info.atime_ep)
+      elsif d == "y"; time_str_from_epoch(info.mtime_ep)
+      elsif d == "z"; time_str_from_epoch(info.ctime_ep)
+      elsif d == "%"; "%"
+      else "?" + d
       end
-      result += val
+      result = result + val
     elsif fmt[i] == "\\" && i + 1 < fmt.length
       i += 1
-      result += case fmt[i]
-      when "n" then "\n"
-      when "t" then "\t"
-      when "\\" then "\\"
+      ec = if fmt[i] == "n"; "\n"
+      elsif fmt[i] == "t"; "\t"
+      elsif fmt[i] == "\\"; "\\"
       else "\\" + fmt[i]
       end
+      result = result + ec
     else
-      result += fmt[i]
+      result = result + fmt[i]
     end
     i += 1
   end
@@ -212,30 +222,33 @@ end
 
 exit_code = 0
 files.each do |name|
-  unless File.exist?(name) || File.symlink?(name)
-    STDERR.puts "stat: cannot stat '#{name}': No such file or directory"
+  cname = "" + name
+  unless File.exist?(cname) || File.symlink?(cname)
+    STDERR.puts "stat: cannot stat '#{cname}': No such file or directory"
     exit_code = 1
     next
   end
 
-  st = opts.dereference ? File.stat(name) : File.lstat(name)
-  ftype = file_type_str(st)
+  info = get_stat_info(cname, opts.dereference)
 
   if opts.format
-    print apply_format(opts.format, name, st, ftype, opts)
-    print "\n" unless opts.format.end_with?("\n")
+    cfmt = "" + opts.format
+    out = apply_format(cfmt, cname, info)
+    STDOUT.write(out)
+    STDOUT.write("\n") unless cfmt.end_with?("\n")
   elsif opts.terse
-    puts "#{name} #{st.size} #{st.blocks} #{(st.mode & 0xFFFF).to_s(16)} #{st.uid} #{st.gid} #{st.dev} #{st.ino} #{st.nlink} #{st.atime.to_i} #{st.mtime.to_i} #{st.ctime.to_i}"
+    puts "" + cname + " " + info.size.to_s + " " + info.blocks.to_s + " " + info.mode_hex + " " + info.uid.to_s + " " + info.gid.to_s + " " + info.dev.to_s + " " + info.ino.to_s + " " + info.nlinks.to_s + " " + info.atime_ep + " " + info.mtime_ep + " " + info.ctime_ep
   else
-    uname = lookup_name_for_uid(st.uid)
-    gname = lookup_name_for_gid(st.gid)
-    puts "  File: #{name}"
-    puts "  Size: #{st.size}\t\tBlocks: #{st.blocks}\t IO Block: 4096   #{ftype}"
-    puts "Device: #{st.dev.to_s(16)}h/#{st.dev}d\tInode: #{st.ino}\t Links: #{st.nlink}"
-    puts "Access: (#{mode_to_octal(st.mode)}/#{mode_to_string(st.mode, ftype)})  Uid: (#{st.uid}/#{uname})   Gid: (#{st.gid}/#{gname})"
-    puts "Access: #{time_str(st.atime)}"
-    puts "Modify: #{time_str(st.mtime)}"
-    puts "Change: #{time_str(st.ctime)}"
+    mode_int = info.mode_hex.to_i(16)
+    octal = mode_to_octal_from_hex(info.mode_hex)
+    mode_full = mode_to_string_from_int(mode_int)
+    puts "  File: " + cname
+    puts "  Size: " + info.size.to_s + "\t\tBlocks: " + info.blocks.to_s + "\t IO Block: 4096   " + info.ftype
+    puts "Device: " + info.dev.to_s(16) + "h/" + info.dev.to_s + "d\tInode: " + info.ino.to_s + "\t Links: " + info.nlinks.to_s
+    puts "Access: (" + octal + "/" + mode_full + ")  Uid: (" + info.uid.to_s + "/" + info.uname + ")   Gid: (" + info.gid.to_s + "/" + info.gname + ")"
+    puts "Access: " + time_str_from_epoch(info.atime_ep)
+    puts "Modify: " + time_str_from_epoch(info.mtime_ep)
+    puts "Change: " + time_str_from_epoch(info.ctime_ep)
     puts " Birth: -"
   end
 end

@@ -171,30 +171,32 @@ def lookup_groups_for_user(name, primary_gid)
       end
     end
   end
-  # Also query dscacheutil on macOS, since /etc/group lacks supplementary groups.
-  if File.exist?("/usr/bin/dscacheutil")
-    raw = "" + `/usr/bin/dscacheutil -q group 2>/dev/null`
-    cur_gid = -1
-    in_match = false
-    raw.lines.each do |line|
+  # On macOS, /etc/group doesn't contain supplementary groups.
+  # Use dscl -search to get explicit memberships (small output, avoids buffer cap),
+  # then query each group's gid individually via dscacheutil.
+  if File.exist?("/usr/bin/dscl") && File.exist?("/usr/bin/dscacheutil")
+    dscl_out = "" + `/usr/bin/dscl . -search /Groups GroupMembership #{name} 2>/dev/null`
+    dscl_out.lines.each do |line|
       cline = "" + line.chomp
-      if cline == ""
-        if in_match && cur_gid >= 0
-          groups.push(cur_gid) unless groups.include?(cur_gid)
-        end
-        cur_gid = -1
-        in_match = false
-      elsif cline.start_with?("gid: ")
-        cur_gid = cline[5, cline.length - 5].to_i
-      elsif cline.start_with?("users: ")
-        ustr = cline[7, cline.length - 7]
-        ustr.split(" ").each do |u|
-          in_match = true if ("" + u) == name
+      next if cline == ""
+      ch0 = cline[0]
+      next if ch0 == " " || ch0 == "\t" || ch0 == ")"
+      gname = ""
+      ci = 0
+      while ci < cline.length && cline[ci] != " " && cline[ci] != "\t"
+        gname = gname + cline[ci]
+        ci += 1
+      end
+      if gname != ""
+        gout = "" + `/usr/bin/dscacheutil -q group -a name #{gname} 2>/dev/null`
+        gout.lines.each do |gl|
+          gcline = "" + gl.chomp
+          if gcline.start_with?("gid: ")
+            gnum = gcline[5, gcline.length - 5].to_i
+            groups.push(gnum) unless groups.include?(gnum)
+          end
         end
       end
-    end
-    if in_match && cur_gid >= 0
-      groups.push(cur_gid) unless groups.include?(cur_gid)
     end
   end
   groups

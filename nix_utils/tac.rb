@@ -29,11 +29,12 @@ USAGE = "Usage: tac [OPTION]... [FILE]...\n" \
         "  --help"
 
 class TacOptions
-  attr_accessor :before, :separator, :regex
+  attr_accessor :before, :separator, :regex, :compiled_re
   def initialize
-    @before = false
-    @separator = "\n"
-    @regex = false
+    @before      = false
+    @separator   = "\n"
+    @regex       = false
+    @compiled_re = Regexp.new("\n")
   end
 end
 
@@ -73,6 +74,8 @@ def parse_argv(argv)
     end
     index += 1
   end
+  # Compile the regex here while opts is still typed (not sp_RbVal).
+  opts.compiled_re = Regexp.new(opts.separator)
   [opts, files]
 end
 
@@ -90,11 +93,12 @@ def segment(content, opts)
   bodies = []
   seps   = []
   rest   = content
-  re     = opts.regex ? Regexp.new(opts.separator) : nil
+  # Use opts.compiled_re (typed as Regexp*) instead of a local ternary variable
+  # to avoid sp_RbVal dispatch failure on .match().
   sep    = opts.separator
   while true
     if opts.regex
-      m = re.match(rest)
+      m = opts.compiled_re.match(rest)
       if m.nil?
         bodies.push(rest)
         break

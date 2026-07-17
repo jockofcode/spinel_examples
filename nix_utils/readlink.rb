@@ -12,10 +12,12 @@
 #   -z, --zero                   NUL-terminate output lines instead of newline
 #   --help                       usage
 #
-# Compile: spinel nix_utils/readlink.rb -o nix_utils/bin/readlink
+# Compile: spinel nix_utils/readlink.rb --link nix_utils/sp_file_ext.o -o nix_utils/bin/readlink
 # Run:
 #   ./bin/readlink /etc/localtime
 #   ./bin/readlink -f relative/path
+
+require_relative 'file_ext'
 
 USAGE = "Usage: readlink [OPTION]... FILE...\n" \
         "Print the value of a symbolic link or canonical file name.\n" \
@@ -115,21 +117,23 @@ term = opts.zero ? "\0" : (opts.no_newline ? "" : "\n")
 exit_code = 0
 
 files.each do |name|
+  cname = "" + name
   if opts.canonicalize
-    unless File.exist?(name) || File.symlink?(name) || opts.allow_missing
-      STDERR.puts "readlink: #{name}: No such file or directory" unless opts.quiet
+    unless File.exist?(cname) || File.symlink?(cname) || opts.allow_missing
+      STDERR.puts "readlink: #{cname}: No such file or directory" unless opts.quiet
       exit_code = 1
       next
     end
-    result = canonicalize_path(name, opts.allow_missing)
+    result = canonicalize_path(cname, opts.allow_missing)
     STDOUT.write(result + term)
   else
-    unless File.symlink?(name)
-      STDERR.puts "readlink: #{name}: Invalid argument" unless opts.quiet
+    unless File.symlink?(cname)
+      STDERR.puts "readlink: #{cname}: Invalid argument" unless opts.quiet
       exit_code = 1
       next
     end
-    STDOUT.write(File.readlink(name) + term)
+    target = FileExt.readlink(cname)
+    STDOUT.write(target + term)
   end
 end
 

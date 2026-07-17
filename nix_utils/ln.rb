@@ -12,10 +12,12 @@
 #   -t DIR               specify the DIR in which to create the links
 #   --help               usage
 #
-# Compile: spinel nix_utils/ln.rb -o nix_utils/bin/ln
+# Compile: spinel nix_utils/ln.rb --link nix_utils/sp_file_ext.o -o nix_utils/bin/ln
 # Run:
 #   ./bin/ln -s /path/to/file linkname
 #   ./bin/ln file1 file2 destdir/
+
+require_relative 'file_ext'
 
 USAGE = "Usage: ln [OPTION]... TARGET LINK_NAME\n" \
         "  or:  ln [OPTION]... TARGET... DIRECTORY\n" \
@@ -95,65 +97,70 @@ def parse_argv(argv)
 end
 
 def make_link(target, link_path, opts)
-  if File.exist?(link_path) || File.symlink?(link_path)
+  ctgt  = "" + target
+  clink = "" + link_path
+  if File.exist?(clink) || File.symlink?(clink)
     if opts.backup
-      File.rename(link_path, link_path + "~")
+      File.rename(clink, clink + "~")
     elsif opts.force
-      File.unlink(link_path)
+      File.unlink(clink)
     else
-      STDERR.puts "ln: failed to create link '#{link_path}': File exists"
+      STDERR.puts "ln: failed to create link '#{clink}': File exists"
       return false
     end
   end
 
   if opts.symbolic
-    tgt = target
+    tgt = ctgt
     if opts.relative
-      # Make target relative to the directory containing link_path
-      link_dir = File.dirname(File.expand_path(link_path))
-      abs_tgt  = File.expand_path(target)
-      # Simple relative path: just use the provided target if it's already relative
+      link_dir = "" + File.dirname(File.expand_path(clink))
+      abs_tgt  = "" + File.expand_path(ctgt)
       tgt = abs_tgt.start_with?(link_dir + "/") ?
             abs_tgt[link_dir.length + 1, abs_tgt.length] :
-            target
+            ctgt
     end
-    File.symlink(tgt, link_path)
+    FileExt.symlink(tgt, clink)
   else
-    File.link(target, link_path)
+    FileExt.link(ctgt, clink)
   end
-  puts "'#{target}' -> '#{link_path}'" if opts.verbose
+  puts "'#{ctgt}' -> '#{clink}'" if opts.verbose
   true
 end
 
 opts, args = parse_argv(ARGV)
 
+raw_dest = ""
+raw_dest_dir = ""
+has_dest_dir = false
 if opts.target_dir
   sources  = args
-  dest_dir = opts.target_dir
+  raw_dest_dir = "" + opts.target_dir
+  has_dest_dir = true
 elsif args.length < 2
   STDERR.puts "ln: missing file operand"
   exit 1
 else
   sources  = args[0, args.length - 1]
-  dest_dir = nil
-  dest     = args.last
+  raw_dest = "" + args.last
 end
 
 exit_code = 0
 
-if dest_dir || sources.length > 1 || (dest_dir.nil? && File.directory?(dest))
-  dir = dest_dir || dest
+if has_dest_dir || sources.length > 1 || (!has_dest_dir && File.directory?(raw_dest))
+  dir = has_dest_dir ? raw_dest_dir : raw_dest
   unless File.directory?(dir)
     STDERR.puts "ln: target '#{dir}' is not a directory"
     exit 1
   end
   sources.each do |src|
-    link_path = dir + "/" + File.basename(src)
-    ok = make_link(src, link_path, opts)
+    csrc = "" + src
+    link_path = dir + "/" + File.basename(csrc)
+    ok = make_link(csrc, link_path, opts)
     exit_code = 1 unless ok
   end
 else
-  ok = make_link(sources[0], dest, opts)
+  csrc = "" + sources[0]
+  ok = make_link(csrc, raw_dest, opts)
   exit_code = 1 unless ok
 end
 

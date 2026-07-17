@@ -23,7 +23,24 @@ TOOLS_DIR="$SCRIPT_DIR/../nix_utils"
 
 # Interpreter used to run each tool under test. Defaults to Spinel's
 # compile-and-run mode; override with the RUBY env var (e.g. RUBY=ruby).
-RUBY="${RUBY:-spinel -E}"
+#
+# When running under Spinel: compile sp_file_ext.o (C native extension for
+# missing File methods) and link it into every tool. Tools that don't use
+# FileExt are unaffected; those that do get the fast C path.
+if [ -z "${RUBY:-}" ]; then
+  SP_EXT_SRC="$TOOLS_DIR/sp_file_ext.c"
+  SP_EXT_OBJ="$TOOLS_DIR/sp_file_ext.o"
+  SPINEL_LIB="$(spinel --version 2>/dev/null | head -1; dirname "$(which spinel)")/../lib/spinel"
+  SPINEL_INC="$HOME/.asdf/installs/spinel/master/lib/spinel/lib"
+  if [ -f "$SP_EXT_SRC" ] && ! [ -f "$SP_EXT_OBJ" ]; then
+    cc -c "$SP_EXT_SRC" -I"$SPINEL_INC" -o "$SP_EXT_OBJ" 2>/dev/null || true
+  fi
+  if [ -f "$SP_EXT_OBJ" ]; then
+    RUBY="spinel --link $SP_EXT_OBJ -E"
+  else
+    RUBY="spinel -E"
+  fi
+fi
 
 failures=0
 

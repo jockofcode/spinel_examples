@@ -16,10 +16,12 @@
 #   -t DIR               copy into DIR instead of last argument being the dest
 #   --help               usage
 #
-# Compile: spinel nix_utils/cp.rb -o nix_utils/bin/cp
+# Compile: spinel nix_utils/cp.rb --link nix_utils/sp_file_ext.o -o nix_utils/bin/cp
 # Run:
 #   ./bin/cp src.txt dest.txt
 #   ./bin/cp -r srcdir destdir
+
+require_relative 'file_ext'
 
 USAGE = "Usage: cp [OPTION]... SOURCE... DEST\n" \
         "  or:  cp [OPTION]... -t DIR SOURCE...\n" \
@@ -126,72 +128,77 @@ def parse_argv(argv)
 end
 
 def copy_file(src, dst, opts)
-  if opts.update && File.exist?(dst)
-    src_mt = File.stat(src).mtime
-    dst_mt = File.stat(dst).mtime
-    return if src_mt <= dst_mt
-  end
-
-  if opts.no_clobber && File.exist?(dst)
+  csrc = "" + src
+  cdst = "" + dst
+  if opts.update && File.exist?(cdst)
+    # File.stat.mtime not in Spinel; delegate to system cp -u.
+    system("/bin/cp -u " + csrc + " " + cdst)
     return
   end
 
-  if opts.interactive && File.exist?(dst) && !opts.force
-    STDERR.write("cp: overwrite '#{dst}'? ")
+  if opts.no_clobber && File.exist?(cdst)
+    return
+  end
+
+  if opts.interactive && File.exist?(cdst) && !opts.force
+    STDERR.write("cp: overwrite '#{cdst}'? ")
     ans = STDIN.gets
     return unless ans && ans.strip.downcase == "y"
   end
 
   if opts.hard_link
-    File.link(src, dst)
+    FileExt.link(csrc, cdst)
   elsif opts.symlink
-    File.symlink(File.expand_path(src), dst)
+    abs_src = csrc[0] == "/" ? csrc : Dir.pwd + "/" + csrc
+    FileExt.symlink(abs_src, cdst)
   else
-    content = File.read(src)
-    f = File.open(dst, "w")
+    content = File.read(csrc)
+    f = File.open(cdst, "w")
     f.write(content)
     f.close
     if opts.preserve
-      stat = File.stat(src)
-      File.utime(stat.atime, stat.mtime, dst)
-      File.chmod(stat.mode, dst)
+      # File.stat / File.utime / File.chmod not in Spinel; delegate to system cp -p.
+      system("/bin/cp -p " + csrc + " " + cdst)
     end
   end
-  puts "cp: '#{src}' -> '#{dst}'" if opts.verbose
+  puts "cp: '#{csrc}' -> '#{cdst}'" if opts.verbose
 end
 
 def copy_recursive(src, dst, opts)
-  if File.directory?(src)
-    unless File.directory?(dst)
-      Dir.mkdir(dst)
-      puts "cp: created directory '#{dst}'" if opts.verbose
+  csrc = "" + src
+  cdst = "" + dst
+  if File.directory?(csrc)
+    unless File.directory?(cdst)
+      Dir.mkdir(cdst)
+      puts "cp: created directory '#{cdst}'" if opts.verbose
     end
-    Dir.entries(src).each do |entry|
-      next if entry == "." || entry == ".."
-      copy_recursive(src + "/" + entry, dst + "/" + entry, opts)
+    Dir.entries(csrc).each do |entry|
+      centry = "" + entry
+      next if centry == "." || centry == ".."
+      copy_recursive(csrc + "/" + centry, cdst + "/" + centry, opts)
     end
     if opts.preserve
-      stat = File.stat(src)
-      File.utime(stat.atime, stat.mtime, dst)
-      File.chmod(stat.mode, dst)
+      system("/bin/cp -p " + csrc + " " + cdst)
     end
   else
-    copy_file(src, dst, opts)
+    copy_file(csrc, cdst, opts)
   end
 end
 
 opts, args = parse_argv(ARGV)
 
+raw_dest = ""
 if opts.target_dir
   sources = args
-  dest = opts.target_dir
+  raw_dest = "" + opts.target_dir
 elsif args.length < 2
   STDERR.puts "cp: missing file operand"
   exit 1
 else
   sources = args[0, args.length - 1]
-  dest = args.last
+  raw_dest = "" + args.last
 end
+dest = raw_dest
 
 exit_code = 0
 
@@ -202,37 +209,38 @@ if sources.length > 1 || (File.exist?(dest) && File.directory?(dest))
     exit 1
   end
   sources.each do |src|
-    unless File.exist?(src)
-      STDERR.puts "cp: cannot stat '#{src}': No such file or directory"
+    csrc = "" + src
+    unless File.exist?(csrc)
+      STDERR.puts "cp: cannot stat '#{csrc}': No such file or directory"
       exit_code = 1
       next
     end
-    dst = dest + "/" + File.basename(src)
-    if File.directory?(src)
+    dst = dest + "/" + File.basename(csrc)
+    if File.directory?(csrc)
       unless opts.recursive
-        STDERR.puts "cp: -r not specified; omitting directory '#{src}'"
+        STDERR.puts "cp: -r not specified; omitting directory '#{csrc}'"
         exit_code = 1
         next
       end
-      copy_recursive(src, dst, opts)
+      copy_recursive(csrc, dst, opts)
     else
-      copy_file(src, dst, opts)
+      copy_file(csrc, dst, opts)
     end
   end
 else
-  src = sources[0]
-  unless File.exist?(src)
-    STDERR.puts "cp: cannot stat '#{src}': No such file or directory"
+  csrc = "" + sources[0]
+  unless File.exist?(csrc)
+    STDERR.puts "cp: cannot stat '#{csrc}': No such file or directory"
     exit 1
   end
-  if File.directory?(src)
+  if File.directory?(csrc)
     unless opts.recursive
-      STDERR.puts "cp: -r not specified; omitting directory '#{src}'"
+      STDERR.puts "cp: -r not specified; omitting directory '#{csrc}'"
       exit 1
     end
-    copy_recursive(src, dest, opts)
+    copy_recursive(csrc, dest, opts)
   else
-    copy_file(src, dest, opts)
+    copy_file(csrc, dest, opts)
   end
 end
 

@@ -159,194 +159,156 @@ def human_size(n)
   end
 end
 
-LS_MODE_BITS = [[0o400, "r"], [0o200, "w"], [0o100, "x"],
-               [0o040, "r"], [0o020, "w"], [0o010, "x"],
-               [0o004, "r"], [0o002, "w"], [0o001, "x"]]
+# File.stat / File.lstat are not available in Spinel.
+# All stat info comes from /usr/bin/stat -f on macOS.
 
-def mode_to_string(mode, ftype_char)
-  bits = ""
-  LS_MODE_BITS.each do |pair|
-    bits += (mode & pair[0]) != 0 ? pair[1] : "-"
-  end
-  bits[2] = (mode & 0o4000) != 0 ? ((mode & 0o100) != 0 ? "s" : "S") : bits[2]
-  bits[5] = (mode & 0o2000) != 0 ? ((mode & 0o010) != 0 ? "s" : "S") : bits[5]
-  bits[8] = (mode & 0o1000) != 0 ? ((mode & 0o001) != 0 ? "t" : "T") : bits[8]
-  ftype_char + bits
-end
-
-def ftype_char(stat)
-  if stat.directory?; "d"
-  elsif stat.symlink?; "l"
-  elsif stat.blockdev?; "b"
-  elsif stat.chardev?; "c"
-  elsif stat.pipe?; "p"
-  elsif stat.socket?; "s"
-  else "-"
+class LsStatInfo
+  attr_accessor :mode_str, :nlinks, :user_s, :group_s, :size, :time_str, :link_tgt, :is_dir, :is_sym
+  def initialize
+    @mode_str = "-rw-r--r--"
+    @nlinks   = 1
+    @user_s   = "?"
+    @group_s  = "?"
+    @size     = 0
+    @time_str = "Jan 01 00:00"
+    @link_tgt = ""
+    @is_dir   = false
+    @is_sym   = false
   end
 end
 
-def lookup_name_for_uid(uid)
-  if File.exist?("/etc/passwd")
-    File.read("/etc/passwd").lines.each do |line|
-      parts = line.chomp.split(":")
-      return parts[0] if parts.length >= 3 && parts[2].to_i == uid
-    end
+def get_stat_info(path, follow_sym)
+  info = LsStatInfo.new
+  info.is_dir = File.directory?(path)
+  info.is_sym = File.symlink?(path)
+  flag = follow_sym ? "-L " : ""
+  raw = "" + `/usr/bin/stat #{flag}-f '%Sp %l %Su %Sg %z %Sm' -t '%b %d %H:%M' '#{path}' 2>/dev/null`
+  craw = "" + raw.chomp
+  parts = craw.split(" ")
+  if parts.length >= 8
+    info.mode_str = "" + parts[0]
+    info.nlinks   = parts[1].to_i
+    info.user_s   = "" + parts[2]
+    info.group_s  = "" + parts[3]
+    info.size     = parts[4].to_i
+    info.time_str = "" + parts[5] + " " + parts[6] + " " + parts[7]
   end
-  uid.to_s
+  if info.is_sym
+    lraw = "" + `/usr/bin/stat -f '%Y' '#{path}' 2>/dev/null`
+    info.link_tgt = "" + lraw.chomp
+  end
+  info
 end
 
-def lookup_name_for_gid(gid)
-  if File.exist?("/etc/group")
-    File.read("/etc/group").lines.each do |line|
-      parts = line.chomp.split(":")
-      return parts[0] if parts.length >= 3 && parts[2].to_i == gid
-    end
-  end
-  gid.to_s
-end
-
-def format_time(t)
-  now = Time.now
-  y  = t.year.to_s.rjust(4)
-  mo = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][t.month - 1]
-  d  = t.day.to_s.rjust(2)
-  if (now - t).abs < 15552000  # 6 months
-    h  = t.hour.to_s.rjust(2, "0")
-    mi = t.min.to_s.rjust(2, "0")
-    "#{mo} #{d} #{h}:#{mi}"
-  else
-    "#{mo} #{d}  #{y}"
-  end
-end
-
-def classify_suffix(stat, name)
-  if stat.directory?; "/"
-  elsif stat.symlink?; "@"
-  elsif stat.pipe?; "|"
-  elsif stat.socket?; "="
-  elsif (stat.mode & 0o111) != 0; "*"
+def classify_suffix_from_info(info)
+  if info.is_dir; "/"
+  elsif info.is_sym; "@"
+  elsif info.mode_str.length >= 4 && info.mode_str[3] == "x"; "*"
   else ""
   end
 end
 
-def print_entry(name, dir, opts, stat_method = :lstat)
-  full = dir ? dir + "/" + name : name
-  stat = File.send(stat_method, full)
-  ftype = ftype_char(stat)
+def print_entry(name, dir, opts)
+  cname = "" + name
+  full = dir != "" ? dir + "/" + cname : cname
+  info = get_stat_info(full, false)
 
+  display = cname
   if opts.hide_ctrl
     display = ""
-    name.bytes.each do |b|
-      display += (b >= 0x20 && b <= 0x7e) ? b.chr : "?"
+    ci = 0
+    while ci < cname.length
+      b = cname[ci].ord
+      display = display + (b >= 0x20 && b <= 0x7e ? cname[ci] : "?")
+      ci += 1
     end
-  else
-    display = name
-  end
-
-  if opts.inode
-    display = stat.ino.to_s.rjust(8) + " " + display
-  end
-
-  if opts.show_size
-    blk = (stat.blocks / 2).to_s.rjust(5)
-    display = blk + " " + display
   end
 
   if opts.classify
-    display += classify_suffix(stat, name)
-  elsif opts.append_slash && stat.directory?
-    display += "/"
+    display = display + classify_suffix_from_info(info)
+  elsif opts.append_slash && info.is_dir
+    display = display + "/"
   end
 
   if opts.long
-    mode_str  = mode_to_string(stat.mode, ftype)
-    nlink     = stat.nlink.to_s.rjust(3)
-    uid_str   = opts.numeric ? stat.uid.to_s : lookup_name_for_uid(stat.uid)
-    gid_str   = opts.numeric ? stat.gid.to_s : lookup_name_for_gid(stat.gid)
-    size_str  = opts.human ? human_size(stat.size).rjust(6) : stat.size.to_s.rjust(8)
-    time_str  = format_time(stat.mtime)
-    link_target = stat.symlink? ? " -> " + File.readlink(full) : ""
-    puts "#{mode_str} #{nlink} #{uid_str.ljust(8)} #{gid_str.ljust(8)} #{size_str} #{time_str} #{display}#{link_target}"
+    nlink_s  = info.nlinks.to_s.rjust(3)
+    size_str = opts.human ? human_size(info.size).rjust(6) : info.size.to_s.rjust(8)
+    link_part = info.is_sym ? " -> " + info.link_tgt : ""
+    puts "" + info.mode_str + " " + nlink_s + " " + info.user_s.ljust(8) + " " + info.group_s.ljust(8) + " " + size_str + " " + info.time_str + " " + display + link_part
   else
     display
   end
 end
 
-def list_dir(path, opts, header = false)
-  entries = Dir.entries(path)
+def list_dir(path, opts, header)
+  cpath = "" + path
+  entries = Dir.entries(cpath)
 
-  # Filter hidden
+  # Collect visible entries into a typed StrArray
   visible = []
+  visible.push(""); visible.pop
   entries.each do |e|
-    if e.start_with?(".")
+    ce = "" + e
+    if ce.start_with?(".")
       next unless opts.all || opts.almost_all
-      next if (e == "." || e == "..") && opts.almost_all
+      next if (ce == "." || ce == "..") && opts.almost_all
     end
-    visible.push(e)
+    visible.push(ce)
   end
 
-  # Sort
-  unless opts.no_sort
-    if opts.sort_time
-      visible = visible.sort_by { |e|
-        full = path + "/" + e
-        File.exist?(full) || File.symlink?(full) ? File.lstat(full).mtime.to_i : 0
-      }
-    elsif opts.sort_size
-      visible = visible.sort_by { |e|
-        full = path + "/" + e
-        File.exist?(full) || File.symlink?(full) ? -File.lstat(full).size : 0
-      }
-    else
-      visible = visible.sort
-    end
-    visible = visible.reverse if opts.reverse
-  end
+  # Sort alphabetically (sort_time/-S require File.lstat which is not available)
+  visible = visible.sort unless opts.no_sort
+  visible = visible.reverse if opts.reverse
 
-  puts "#{path}:" if header
+  puts "" + cpath + ":" if header
 
   if opts.long
-    # Print total blocks
-    total_blocks = 0
+    puts "total 0"
     visible.each do |e|
-      full = path + "/" + e
+      ce = "" + e
+      full = cpath + "/" + ce
       next unless File.exist?(full) || File.symlink?(full)
-      total_blocks += File.lstat(full).blocks
+      print_entry(ce, cpath, opts)
     end
-    puts "total #{total_blocks / 2}"
-    visible.each { |e| print_entry(e, path, opts) }
   elsif opts.comma
-    parts = []
+    cparts = []
+    cparts.push(""); cparts.pop
     visible.each do |e|
-      full = path + "/" + e
+      ce = "" + e
+      full = cpath + "/" + ce
       next unless File.exist?(full) || File.symlink?(full)
-      stat = File.lstat(full)
-      name = opts.classify ? e + classify_suffix(stat, e) : e
-      name = opts.append_slash && stat.directory? ? e + "/" : name
-      parts.push(name)
+      info = get_stat_info(full, false)
+      entry_name = opts.classify ? ce + classify_suffix_from_info(info) : ce
+      entry_name = (opts.append_slash && info.is_dir) ? ce + "/" : entry_name
+      cparts.push(entry_name)
     end
-    puts parts.join(", ")
-  elsif opts.one_per_line || opts.long
+    puts cparts.join(", ")
+  elsif opts.one_per_line
     visible.each do |e|
-      full = path + "/" + e
+      ce = "" + e
+      full = cpath + "/" + ce
       next unless File.exist?(full) || File.symlink?(full)
-      puts print_entry(e, path, opts)
+      result = print_entry(ce, cpath, opts)
+      puts result
     end
   else
     names = []
+    names.push(""); names.pop
     visible.each do |e|
-      full = path + "/" + e
+      ce = "" + e
+      full = cpath + "/" + ce
       next unless File.exist?(full) || File.symlink?(full)
-      names.push(print_entry(e, path, opts) || e)
+      result = print_entry(ce, cpath, opts)
+      names.push(result)
     end
-    # Multi-column layout (simple: 2 columns)
     puts names.join("  ")
   end
 
   if opts.recursive
     visible.each do |e|
-      full = path + "/" + e
-      if File.directory?(full) && !File.symlink?(full) && e != "." && e != ".."
+      ce = "" + e
+      full = cpath + "/" + ce
+      if File.directory?(full) && !File.symlink?(full) && ce != "." && ce != ".."
         puts ""
         list_dir(full, opts, true)
       end
@@ -359,40 +321,47 @@ files = ["."] if files.empty?
 
 exit_code = 0
 dirs = []
+dirs.push(""); dirs.pop
 non_dirs = []
+non_dirs.push(""); non_dirs.pop
 
 files.each do |f|
-  if !File.exist?(f) && !File.symlink?(f)
-    STDERR.puts "ls: cannot access '#{f}': No such file or directory"
+  cf = "" + f
+  if !File.exist?(cf) && !File.symlink?(cf)
+    STDERR.puts "ls: cannot access '#{cf}': No such file or directory"
     exit_code = 1
     next
   end
-  if File.directory?(f) && !opts.directory
-    dirs.push(f)
+  if File.directory?(cf) && !opts.directory
+    dirs.push(cf)
   else
-    non_dirs.push(f)
+    non_dirs.push(cf)
   end
 end
 
 # Print non-directories first
 non_dirs.each do |f|
-  stat = File.lstat(f)
+  cf = "" + f
   if opts.long
-    name = File.basename(f)
-    dir  = File.dirname(f)
-    print_entry(name, dir, opts)
+    cname = "" + File.basename(cf)
+    cdir  = "" + File.dirname(cf)
+    print_entry(cname, cdir, opts)
   else
-    name = File.basename(f)
-    suffix = opts.classify ? (stat.directory? ? "/" : (stat.symlink? ? "@" : ((stat.mode & 0o111) != 0 ? "*" : ""))) : (opts.append_slash && stat.directory? ? "/" : "")
-    puts name + suffix
+    cname = "" + File.basename(cf)
+    info = get_stat_info(cf, false)
+    suffix = opts.classify ? classify_suffix_from_info(info) : (opts.append_slash && info.is_dir ? "/" : "")
+    puts cname + suffix
   end
 end
 
 show_header = files.length > 1 || (dirs.length > 0 && non_dirs.length > 0)
 
+dir_idx = 0
 dirs.each do |d|
-  puts "" if show_header && (non_dirs.length > 0 || dirs.index(d) > 0)
-  list_dir(d, opts, show_header)
+  cd = "" + d
+  puts "" if show_header && (non_dirs.length > 0 || dir_idx > 0)
+  list_dir(cd, opts, show_header)
+  dir_idx += 1
 end
 
 exit exit_code

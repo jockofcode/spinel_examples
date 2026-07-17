@@ -27,12 +27,12 @@ USAGE = "Usage: fold [OPTION]... [FILE]...\n" \
         "  -s  break at spaces   --help"
 
 class FoldOptions
-  attr_accessor :width, :bytes, :characters, :spaces
+  attr_accessor :width, :count_bytes, :count_chars, :spaces
   def initialize
-    @width      = 80
-    @bytes      = false
-    @characters = false
-    @spaces     = false
+    @width       = 80
+    @count_bytes = false
+    @count_chars = false
+    @spaces      = false
   end
 end
 
@@ -60,9 +60,9 @@ def parse_argv(argv)
     elsif arg == "--help"
       puts USAGE; exit 0
     elsif arg == "-b" || arg == "--bytes"
-      opts.bytes = true
+      opts.count_bytes = true
     elsif arg == "-c" || arg == "--characters"
-      opts.characters = true
+      opts.count_chars = true
     elsif arg == "-s" || arg == "--spaces"
       opts.spaces = true
     elsif arg == "-w" || arg == "--width"
@@ -107,7 +107,7 @@ end
 # tab jumps to the next multiple of 8, a backspace moves back one, and a
 # carriage return resets to column zero.
 def char_width(char, column, opts)
-  return 1 if opts.bytes || opts.characters
+  return 1 if opts.count_bytes || opts.count_chars
   if char == "\t"
     (column + 8 - column % 8) - column
   elsif char == "\b"
@@ -121,7 +121,7 @@ end
 
 # Recompute the ending column of a segment from scratch.
 def segment_column(seg, opts)
-  return seg.length if opts.bytes || opts.characters
+  return seg.length if opts.count_bytes || opts.count_chars
   col = 0
   k = 0
   while k < seg.length

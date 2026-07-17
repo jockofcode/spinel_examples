@@ -20,9 +20,11 @@ This note compares Ruby 3.4 documentation against the installed Spinel compiler
 >   shorthand is fully supported.
 > - **Lazy enumerators** (`(1..Float::INFINITY).lazy.select {...}.first(n)`) confirmed
 >   working.
-> - **`optparse` with value-taking options** now fails at C compile time rather than
->   silently swallowing values at runtime — the failure mode changed, the limitation
->   did not.
+> - **`optparse` is currently broken** — any call to `parse!` fails at C compile time
+>   with a type error, including programs that use only boolean flags. Root cause
+>   identified: the compiler's poly-receiver `.call()` dispatch path doesn't handle
+>   `TY_POLY` arguments (see the `optparse` section below). The workaround is a manual
+>   `ARGV` loop.
 
 Sources used:
 
@@ -52,7 +54,8 @@ Use this as the quick decision map for writing examples:
 | Ruby area | Spinel status today |
 |---|---|
 | Basic strings, arrays, hashes, ranges, numbers, regexp, file reads/writes, math | Broadly available — most of the practical surface works |
-| `json`, `base64`, `digest`, `stringio`, `strscan`, `set`, `optparse` (boolean flags only), `forwardable`, `io/console` | Available through `require` with `SPINEL_REQUIRE_GATE=1` |
+| `json`, `base64`, `digest`, `stringio`, `strscan`, `set`, `forwardable`, `io/console` | Available through `require` with `SPINEL_REQUIRE_GATE=1` |
+| `optparse` | Currently broken — `parse!` fails at C compile time even with boolean-only flags; use a manual `ARGV` loop |
 | `send`, `public_send`, `respond_to?`, `method(:name)`, `&:sym`, `obj.method(:name).call` | Work when method name is a compile-time literal |
 | Lazy enumerators | Work: `(1..Float::INFINITY).lazy.select {...}.first(n)` confirmed |
 | Socket/network helpers | `lib/socket_shim.rb` provides a small `TCPServer`/`TCPSocket` layer over Spinel's `sp_net` helpers |
@@ -174,21 +177,36 @@ Use `SPINEL_REQUIRE_GATE=1` when running programs that contain `require`:
 - `strscan`
 - `set`
 - `forwardable`
-- `optparse` (boolean flags only — see caveat below)
 - `io/console` for `IO#winsize`
 
-### `optparse` value-taking options do not work — now a compile error
+### `optparse` is currently broken — any use of `parse!` fails
 
-`require "optparse"` loads, but options that take a value argument cause a C
-compile error in the generated `optparse.rb` package code. The failure changed
-from a silent runtime miss (prior audit) to an explicit C type error:
+`require "optparse"` and `OptionParser.new` both load fine. But any call to
+`parse!` — even with an empty block and no options registered — fails at C
+compile time with:
 
 ```
 error: passing 'sp_RbVal' to parameter of incompatible type 'mrb_int'
 ```
 
-Boolean-only flags still work. Workaround: use a manual `ARGV` loop for any
-flag that takes a value. A manual loop behaves identically under Spinel and CRuby.
+The root cause is in `src/codegen_call.c` in the `!has_user_call` dispatch path
+for calling `.call()` on a poly receiver (`@handlers[j].call(...)`). That path
+generates a BoundMethod/Proc ternary but its argument-emission loops only handle
+`TY_INT`, `TY_BOOL`, and pointer types — not `TY_POLY` (`sp_RbVal`). When
+`argv[i]` or a string slice is passed as an argument, it has type `TY_POLY` and
+falls through to a bare `emit_expr`, which dumps an `sp_RbVal` struct into an
+`mrb_int` slot.
+
+Two possible fixes:
+- **In `optparse.rb`**: coerce poly string args before calling handlers —
+  `@handlers[j].call("" + value)` and `@handlers[j].call("" + argv[i])`.
+  `TY_STRING` is handled correctly by `proc_slot_is_ptr`.
+- **In `codegen_call.c`** (root fix): add a `TY_POLY` case in the two argument
+  loops at lines 7112 and 7122, or replace the inline loop with a call to
+  `emit_proc_call_args(c, argc, argv, b, 1)` which already handles poly correctly.
+
+Workaround for programs: use a manual `ARGV` loop. It behaves identically under
+Spinel and CRuby and has no dependency on the broken dispatch path.
 
 ### Require Does Not Work for These Ruby Libraries
 

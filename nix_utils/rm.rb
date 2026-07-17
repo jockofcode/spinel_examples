@@ -23,10 +23,12 @@ USAGE = "Usage: rm [OPTION]... FILE...\n" \
         "  -i      prompt before every removal\n" \
         "  -v      verbose\n" \
         "  -d      remove empty directories\n" \
+        "  --preserve-root     do not remove '/' (default)\n" \
+        "  --no-preserve-root  allow removal of '/'\n" \
         "  --help"
 
 class RmOptions
-  attr_accessor :recursive, :force, :interactive, :interactive_once, :verbose, :dir
+  attr_accessor :recursive, :force, :interactive, :interactive_once, :verbose, :dir, :preserve_root
   def initialize
     @recursive        = false
     @force            = false
@@ -34,6 +36,7 @@ class RmOptions
     @interactive_once = false
     @verbose          = false
     @dir              = false
+    @preserve_root    = true
   end
 end
 
@@ -63,6 +66,8 @@ def parse_argv(argv)
     elsif arg == "--verbose"; opts.verbose = true
     elsif arg == "--dir"; opts.dir = true
     elsif arg == "--interactive"; opts.interactive = true
+    elsif arg == "--preserve-root"; opts.preserve_root = true
+    elsif arg == "--no-preserve-root"; opts.preserve_root = false
     else
       letters = arg[1, arg.length - 1]
       li = 0
@@ -88,6 +93,11 @@ end
 
 def rm_file(path, opts)
   cpath = "" + path
+  if opts.preserve_root && cpath == "/"
+    STDERR.puts "rm: it is dangerous to operate recursively on '/'"
+    STDERR.puts "rm: use --no-preserve-root to override this failsafe"
+    return false
+  end
   unless File.exist?(cpath) || File.symlink?(cpath)
     unless opts.force
       STDERR.puts "rm: cannot remove '#{cpath}': No such file or directory"

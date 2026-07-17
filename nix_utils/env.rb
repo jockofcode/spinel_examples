@@ -8,6 +8,7 @@
 #   -i, --ignore-environment  start with an empty environment
 #   -u NAME, --unset=NAME     remove variable from environment
 #   -0, --null                end each output line with NUL instead of newline
+#   -C DIR, --chdir=DIR       change working directory to DIR before running command
 #   --help                    usage
 #
 # Compile: spinel nix_utils/env.rb -o nix_utils/bin/env
@@ -22,16 +23,18 @@ USAGE = "Usage: env [OPTION]... [-] [NAME=VALUE]... [COMMAND [ARG]...]\n" \
         "  -i  start with empty environment\n" \
         "  -u NAME  remove NAME from environment\n" \
         "  -0  end output lines with NUL\n" \
+        "  -C DIR  change working directory to DIR\n" \
         "  --help"
 
 class EnvOptions
-  attr_accessor :ignore_env, :unset_vars, :null_delim
+  attr_accessor :ignore_env, :unset_vars, :null_delim, :chdir
   def initialize
     @ignore_env = false
     @unset_vars = []
     @unset_vars.push("")
     @unset_vars.pop
     @null_delim = false
+    @chdir      = nil
   end
 end
 
@@ -54,6 +57,13 @@ def parse_argv(argv)
       opts.unset_vars.push("" + arg[8, arg.length - 8])
     elsif arg.length > 2 && arg[0, 2] == "-u"
       opts.unset_vars.push("" + arg[2, arg.length - 2])
+    elsif arg == "-C" || arg == "--chdir"
+      index += 1
+      opts.chdir = argv[index]
+    elsif arg.length > 8 && arg[0, 8] == "--chdir="
+      opts.chdir = arg[8, arg.length - 8]
+    elsif arg.length > 2 && arg[0, 2] == "-C"
+      opts.chdir = arg[2, arg.length - 2]
     elsif arg.length >= 2 && arg[0] == "-"
       STDERR.puts "env: invalid option -- '#{arg}'"
       exit 1
@@ -103,9 +113,12 @@ if cmd_args.length > 0
   # Build an env command line so unsets and clean-env (-i) are respected.
   env_prefix = opts.ignore_env ? "/usr/bin/env -i" : "/usr/bin/env"
   opts.unset_vars.each { |k| env_prefix = env_prefix + " -u " + k }
-  env.each { |k, v| env_prefix = env_prefix + " " + k + "=" + v }
+  env.each { |k, v| env_prefix = env_prefix + " " + k + "='" + v.gsub("'", "'\\''") + "'" }
   quoted = []
   cmd_args.each { |a| quoted.push("'" + a.gsub("'", "'\\''") + "'") }
+  if opts.chdir
+    Dir.chdir("" + opts.chdir)
+  end
   result = system(env_prefix + " " + quoted.join(" "))
   exit result ? 0 : 1
 else

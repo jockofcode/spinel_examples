@@ -8,6 +8,8 @@
 #   -a, --all    do not ignore entries starting with .
 #   -A, --almost-all  like -a but do not list . and ..
 #   -h, --human-readable  with -l, print human-readable sizes
+#   -L, --dereference  follow symlinks (show info for the target, not the link)
+#   -H           follow command-line symlinks only
 #   -R, --recursive  list subdirectories recursively
 #   -r, --reverse  reverse order while sorting
 #   -t           sort by modification time, newest first
@@ -34,6 +36,7 @@ USAGE = "Usage: ls [OPTION]... [FILE]...\n" \
         "List information about the FILEs (default: current directory).\n" \
         "  -l  long format       -a  all (incl. hidden)   -A  all except . ..\n" \
         "  -h  human sizes       -R  recursive             -r  reverse\n" \
+        "  -L  follow symlinks   -H  follow cmd-line syms\n" \
         "  -t  sort by time      -S  sort by size          -s  print sizes\n" \
         "  -i  inodes            -d  list dirs themselves\n" \
         "  -F  classify (*/=@|)  -p  append / to dirs\n" \
@@ -45,27 +48,29 @@ class LsOptions
   attr_accessor :long, :all, :almost_all, :human, :recursive, :reverse
   attr_accessor :sort_time, :sort_size, :no_sort, :show_size, :inode
   attr_accessor :directory, :classify, :append_slash, :one_per_line
-  attr_accessor :comma, :numeric, :hide_ctrl, :color
+  attr_accessor :comma, :numeric, :hide_ctrl, :color, :dereference, :dereference_cmd
   def initialize
-    @long        = false
-    @all         = false
-    @almost_all  = false
-    @human       = false
-    @recursive   = false
-    @reverse     = false
-    @sort_time   = false
-    @sort_size   = false
-    @no_sort     = false
-    @show_size   = false
-    @inode       = false
-    @directory   = false
-    @classify    = false
-    @append_slash = false
-    @one_per_line = false
-    @comma       = false
-    @numeric     = false
-    @hide_ctrl   = false
-    @color       = "auto"
+    @long            = false
+    @all             = false
+    @almost_all      = false
+    @human           = false
+    @recursive       = false
+    @reverse         = false
+    @sort_time       = false
+    @sort_size       = false
+    @no_sort         = false
+    @show_size       = false
+    @inode           = false
+    @directory       = false
+    @classify        = false
+    @append_slash    = false
+    @one_per_line    = false
+    @comma           = false
+    @numeric         = false
+    @hide_ctrl       = false
+    @color           = "auto"
+    @dereference     = false
+    @dereference_cmd = false
   end
 end
 
@@ -86,6 +91,8 @@ def parse_argv(argv)
     elsif arg == "--human-readable"; opts.human = true
     elsif arg == "--recursive"; opts.recursive = true
     elsif arg == "--reverse"; opts.reverse = true
+    elsif arg == "--dereference"; opts.dereference = true
+    elsif arg == "--dereference-command-line"; opts.dereference_cmd = true
     elsif arg == "--size"; opts.show_size = true
     elsif arg == "--inode"; opts.inode = true
     elsif arg == "--directory"; opts.directory = true
@@ -104,6 +111,8 @@ def parse_argv(argv)
         elsif letter == "a"; opts.all = true
         elsif letter == "A"; opts.almost_all = true
         elsif letter == "h"; opts.human = true
+        elsif letter == "L"; opts.dereference = true
+        elsif letter == "H"; opts.dereference_cmd = true
         elsif letter == "R"; opts.recursive = true
         elsif letter == "r"; opts.reverse = true
         elsif letter == "t"; opts.sort_time = true
@@ -208,10 +217,10 @@ def classify_suffix_from_info(info)
   end
 end
 
-def print_entry(name, dir, opts)
+def print_entry(name, dir, opts, follow)
   cname = "" + name
   full = dir != "" ? dir + "/" + cname : cname
-  info = get_stat_info(full, false)
+  info = get_stat_info(full, follow)
 
   display = cname
   if opts.hide_ctrl
@@ -268,7 +277,7 @@ def list_dir(path, opts, header)
       ce = "" + e
       full = cpath + "/" + ce
       next unless File.exist?(full) || File.symlink?(full)
-      print_entry(ce, cpath, opts)
+      print_entry(ce, cpath, opts, opts.dereference)
     end
   elsif opts.comma
     cparts = []
@@ -277,7 +286,7 @@ def list_dir(path, opts, header)
       ce = "" + e
       full = cpath + "/" + ce
       next unless File.exist?(full) || File.symlink?(full)
-      info = get_stat_info(full, false)
+      info = get_stat_info(full, opts.dereference)
       entry_name = opts.classify ? ce + classify_suffix_from_info(info) : ce
       entry_name = (opts.append_slash && info.is_dir) ? ce + "/" : entry_name
       cparts.push(entry_name)
@@ -288,7 +297,7 @@ def list_dir(path, opts, header)
       ce = "" + e
       full = cpath + "/" + ce
       next unless File.exist?(full) || File.symlink?(full)
-      result = print_entry(ce, cpath, opts)
+      result = print_entry(ce, cpath, opts, opts.dereference)
       puts result
     end
   else
@@ -298,7 +307,7 @@ def list_dir(path, opts, header)
       ce = "" + e
       full = cpath + "/" + ce
       next unless File.exist?(full) || File.symlink?(full)
-      result = print_entry(ce, cpath, opts)
+      result = print_entry(ce, cpath, opts, opts.dereference)
       names.push(result)
     end
     puts names.join("  ")
@@ -342,13 +351,14 @@ end
 # Print non-directories first
 non_dirs.each do |f|
   cf = "" + f
+  follow_cli = opts.dereference || opts.dereference_cmd
   if opts.long
     cname = "" + File.basename(cf)
     cdir  = "" + File.dirname(cf)
-    print_entry(cname, cdir, opts)
+    print_entry(cname, cdir, opts, follow_cli)
   else
     cname = "" + File.basename(cf)
-    info = get_stat_info(cf, false)
+    info = get_stat_info(cf, follow_cli)
     suffix = opts.classify ? classify_suffix_from_info(info) : (opts.append_slash && info.is_dir ? "/" : "")
     puts cname + suffix
   end

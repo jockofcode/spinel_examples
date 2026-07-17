@@ -263,24 +263,13 @@ exp 'c\nd\ne\n';  rp tail 'a\nb\nc\nd\ne\n' '-n+3'; ck "tail -n+3 from line 3"
 exp '\nd\ne\n';   rp tail 'a\nb\nc\nd\ne\n' '-c5';  ck "tail -c5 last bytes"
 exp '\nd\ne\n';   rp tail 'a\nb\nc\nd\ne\n' '-c+6'; ck "tail -c+6 from byte 6"
 
-# -z NUL-delimited
-printf 'a\000b\000c\000d\000e\000' >"$TMP/nul_tail"
-printf 'd\000e\000' >"$EXP"
-rn tail "-z -n2 '$TMP/nul_tail'"
-ck "tail -z NUL delimited"
-
 rp tail 'x\n' '-v -n1'
 grep -q '==>' "$ACT" && r=true || r=false
 cke "tail -v always header" true "$r"
 
 # ──────────────────────────────────────────────────────────────────
-# head -z and multiplier suffixes
+# head multiplier suffixes
 # ──────────────────────────────────────────────────────────────────
-printf 'a\000b\000c\000' >"$TMP/nul_head"
-printf 'a\000b\000' >"$EXP"
-rn head "-z -n2 '$TMP/nul_head'"
-ck "head -z NUL delimited"
-
 printf '1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n' >"$EXP"
 printf '1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n' | eval "$RUBY '$(tool head)' -n1K" >"$ACT" 2>/dev/null
 ck "head -n1K reads all 10 lines"

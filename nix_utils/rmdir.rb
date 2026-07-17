@@ -17,13 +17,15 @@ USAGE = "Usage: rmdir [OPTION]... DIRECTORY...\n" \
         "Remove the DIRECTORY(ies), if they are empty.\n" \
         "  -p  remove DIRECTORY and its empty parent directories\n" \
         "  -v  print a message for each removed directory\n" \
+        "  --ignore-fail-on-non-empty  ignore failures due to non-empty directories\n" \
         "  --help"
 
 class RmdirOptions
-  attr_accessor :parents, :verbose
+  attr_accessor :parents, :verbose, :ignore_non_empty
   def initialize
-    @parents = false
-    @verbose = false
+    @parents        = false
+    @verbose        = false
+    @ignore_non_empty = false
   end
 end
 
@@ -45,6 +47,8 @@ def parse_argv(argv)
       opts.parents = true
     elsif arg == "-v" || arg == "--verbose"
       opts.verbose = true
+    elsif arg == "--ignore-fail-on-non-empty"
+      opts.ignore_non_empty = true
     else
       letters = arg[1, arg.length - 1]
       li = 0
@@ -72,6 +76,7 @@ def remove_dir(path, opts)
   end
   entries = Dir.entries(path).reject { |e| e == "." || e == ".." }
   unless entries.empty?
+    return true if opts.ignore_non_empty
     STDERR.puts "rmdir: failed to remove '#{path}': Directory not empty"
     return false
   end

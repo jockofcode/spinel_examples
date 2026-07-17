@@ -5,6 +5,7 @@
 # Flags:
 #   -s, --symbolic       make symbolic links instead of hard links
 #   -f, --force          remove existing destination files
+#   -i, --interactive    prompt before removing destination file
 #   -n, --no-dereference treat DEST symlink as normal file (with -s)
 #   -v, --verbose        print name of each linked file
 #   -r, --relative       create symlinks relative to link location
@@ -29,15 +30,16 @@ USAGE = "Usage: ln [OPTION]... TARGET LINK_NAME\n" \
         "  --help"
 
 class LnOptions
-  attr_accessor :symbolic, :force, :verbose, :relative, :no_deref, :backup, :target_dir
+  attr_accessor :symbolic, :force, :interactive, :verbose, :relative, :no_deref, :backup, :target_dir
   def initialize
-    @symbolic   = false
-    @force      = false
-    @verbose    = false
-    @relative   = false
-    @no_deref   = false
-    @backup     = false
-    @target_dir = nil
+    @symbolic     = false
+    @force        = false
+    @interactive  = false
+    @verbose      = false
+    @relative     = false
+    @no_deref     = false
+    @backup       = false
+    @target_dir   = nil
   end
 end
 
@@ -59,6 +61,7 @@ def parse_argv(argv)
     if arg == "--help"; puts USAGE; exit 0; end
     if arg == "--symbolic"; opts.symbolic = true
     elsif arg == "--force"; opts.force = true
+    elsif arg == "--interactive"; opts.interactive = true
     elsif arg == "--verbose"; opts.verbose = true
     elsif arg == "--relative"; opts.relative = true
     elsif arg == "--no-dereference"; opts.no_deref = true
@@ -74,6 +77,7 @@ def parse_argv(argv)
         letter = letters[li]
         if letter == "s"; opts.symbolic = true
         elsif letter == "f"; opts.force = true
+        elsif letter == "i"; opts.interactive = true
         elsif letter == "v"; opts.verbose = true
         elsif letter == "r"; opts.relative = true
         elsif letter == "n"; opts.no_deref = true
@@ -102,6 +106,11 @@ def make_link(target, link_path, opts)
   if File.exist?(clink) || File.symlink?(clink)
     if opts.backup
       File.rename(clink, clink + "~")
+    elsif opts.interactive && !opts.force
+      STDERR.write("ln: replace '#{clink}'? ")
+      ans = STDIN.gets
+      return true unless ans && ans.strip.downcase == "y"
+      File.unlink(clink)
     elsif opts.force
       File.unlink(clink)
     else

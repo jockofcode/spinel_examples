@@ -9,7 +9,6 @@
 #   -c, --bytes=[+]NUM      last NUM bytes; with +NUM, start from byte NUM
 #   -q, --quiet, --silent   never print file-name headers
 #   -v, --verbose           always print file-name headers
-#   -z, --zero-terminated   line delimiter is NUL, not newline
 #   -f, --follow[=descriptor]  output appended data as the file grows
 #   -F                      same as --follow=name --retry
 #   -s N, --sleep-interval=N  with -f, sleep for N seconds between polls (default 1.0)
@@ -36,12 +35,12 @@ USAGE = "Usage: tail [OPTION]... [FILE]...\n" \
         "  -n [+]NUM   last NUM lines (or start at line NUM with +)\n" \
         "  -c [+]NUM   last NUM bytes (or start at byte NUM with +)\n" \
         "  -q  never print headers   -v  always print headers\n" \
-        "  -z  NUL-delimited   -f  follow   -F  follow by name\n" \
+        "  -f  follow   -F  follow by name\n" \
         "  -s N  poll interval (default 1.0)   --pid=PID  exit when PID dies\n" \
         "  --help"
 
 class TailOptions
-  attr_accessor :count, :from_start, :by_bytes, :quiet, :verbose, :zero
+  attr_accessor :count, :from_start, :by_bytes, :quiet, :verbose
   attr_accessor :follow, :follow_name, :retry_open, :sleep_interval, :pid
   def initialize
     @count          = 10
@@ -49,7 +48,6 @@ class TailOptions
     @by_bytes       = false
     @quiet          = false
     @verbose        = false
-    @zero           = false
     @follow         = false
     @follow_name    = false
     @retry_open     = false
@@ -115,8 +113,6 @@ def parse_argv(argv)
       opts.quiet = true
     elsif arg == "-v" || arg == "--verbose"
       opts.verbose = true
-    elsif arg == "-z" || arg == "--zero-terminated"
-      opts.zero = true
     elsif arg == "-f" || arg == "--follow" || arg == "--follow=descriptor"
       opts.follow = true
     elsif arg == "--follow=name"
@@ -164,21 +160,14 @@ def read_source(name)
   File.read(cname)
 end
 
-def line_delim(opts)
-  opts.zero ? "\0" : "\n"
-end
-
-def split_lines(content, opts)
-  delim = line_delim(opts)
-  lines = content.split(delim, -1)
-  # Remove a trailing empty record that appears when content ends with delim.
+def split_lines(content)
+  lines = content.split("\n", -1)
   lines.pop if !lines.empty? && lines.last == ""
   lines
 end
 
-def rejoin_lines(lines, opts)
-  delim = line_delim(opts)
-  lines.empty? ? "" : lines.join(delim) + delim
+def rejoin_lines(lines)
+  lines.empty? ? "" : lines.join("\n") + "\n"
 end
 
 def byte_tail(content, opts)
@@ -193,14 +182,14 @@ def byte_tail(content, opts)
 end
 
 def line_tail(content, opts)
-  lines = split_lines(content, opts)
+  lines = split_lines(content)
   if opts.from_start
     start = opts.count - 1
     start = lines.length if start > lines.length
-    return rejoin_lines(lines[start, lines.length - start], opts)
+    return rejoin_lines(lines[start, lines.length - start])
   end
   keep = opts.count < lines.length ? opts.count : lines.length
-  rejoin_lines(lines[lines.length - keep, keep], opts)
+  rejoin_lines(lines[lines.length - keep, keep])
 end
 
 def tail_slice(content, opts)

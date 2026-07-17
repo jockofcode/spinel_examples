@@ -11,6 +11,8 @@
 #   -v, --verbose        explain what is being done
 #   -l, --link           hard-link instead of copying files
 #   -s, --symbolic-link  make symbolic links instead of copying
+#   -P, --no-dereference copy symlinks as symlinks (do not follow)
+#   -L, --dereference    always follow symbolic links in SOURCE (default)
 #   -a, --archive        same as -dpR
 #   -u, --update         copy only when SOURCE is newer than DEST or DEST missing
 #   -t DIR               copy into DIR instead of last argument being the dest
@@ -37,7 +39,7 @@ USAGE = "Usage: cp [OPTION]... SOURCE... DEST\n" \
 
 class CpOptions
   attr_accessor :recursive, :force, :interactive, :no_clobber
-  attr_accessor :preserve, :verbose, :hard_link, :symlink, :update
+  attr_accessor :preserve, :verbose, :hard_link, :symlink, :update, :no_deref
   attr_accessor :target_dir
   def initialize
     @recursive   = false
@@ -49,6 +51,7 @@ class CpOptions
     @hard_link   = false
     @symlink     = false
     @update      = false
+    @no_deref    = false
     @target_dir  = nil
   end
 end
@@ -84,6 +87,8 @@ def parse_argv(argv)
     elsif arg == "--update"; opts.update = true
     elsif arg == "--link"; opts.hard_link = true
     elsif arg == "--symbolic-link"; opts.symlink = true
+    elsif arg == "--no-dereference"; opts.no_deref = true
+    elsif arg == "--dereference"; opts.no_deref = false
     elsif arg == "-t" || arg == "--target-directory"
       index += 1
       opts.target_dir = argv[index]
@@ -106,6 +111,8 @@ def parse_argv(argv)
         elsif letter == "u"; opts.update = true
         elsif letter == "l"; opts.hard_link = true
         elsif letter == "s"; opts.symlink = true
+        elsif letter == "P"; opts.no_deref = true
+        elsif letter == "L"; opts.no_deref = false
         elsif letter == "t"
           li += 1
           if li < letters.length
@@ -130,6 +137,21 @@ end
 def copy_file(src, dst, opts)
   csrc = "" + src
   cdst = "" + dst
+  if opts.no_deref && File.symlink?(csrc)
+    if File.exist?(cdst) || File.symlink?(cdst)
+      return if opts.no_clobber
+      if opts.interactive && !opts.force
+        STDERR.write("cp: overwrite '#{cdst}'? ")
+        ans = STDIN.gets
+        return unless ans && ans.strip.downcase == "y"
+      end
+      File.unlink(cdst) if opts.force || opts.interactive
+    end
+    tgt = FileExt.readlink(csrc)
+    FileExt.symlink(tgt, cdst)
+    puts "cp: '#{csrc}' -> '#{cdst}'" if opts.verbose
+    return
+  end
   if opts.update && File.exist?(cdst)
     # File.stat.mtime not in Spinel; delegate to system cp -u.
     system("/bin/cp -u " + csrc + " " + cdst)

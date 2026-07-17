@@ -27,12 +27,13 @@ USAGE = "Usage: stat [OPTION]... FILE...\n" \
         "  --help"
 
 class StatOptions
-  attr_accessor :filesystem, :format, :terse, :dereference
+  attr_accessor :filesystem, :format, :printf_format, :terse, :dereference
   def initialize
-    @filesystem  = false
-    @format      = nil
-    @terse       = false
-    @dereference = false
+    @filesystem    = false
+    @format        = nil
+    @printf_format = nil
+    @terse         = false
+    @dereference   = false
   end
 end
 
@@ -59,6 +60,10 @@ def parse_argv(argv)
       opts.format = arg[2, arg.length - 2]
     elsif arg.length > 9 && arg[0, 9] == "--format="
       opts.format = arg[9, arg.length - 9]
+    elsif arg == "--printf"
+      index += 1; opts.printf_format = argv[index]
+    elsif arg.length > 9 && arg[0, 9] == "--printf="
+      opts.printf_format = arg[9, arg.length - 9]
     else
       letters = arg[1, arg.length - 1]
       li = 0
@@ -231,7 +236,10 @@ files.each do |name|
 
   info = get_stat_info(cname, opts.dereference)
 
-  if opts.format
+  if opts.printf_format
+    cfmt = "" + opts.printf_format
+    STDOUT.write(apply_format(cfmt, cname, info))
+  elsif opts.format
     cfmt = "" + opts.format
     out = apply_format(cfmt, cname, info)
     STDOUT.write(out)

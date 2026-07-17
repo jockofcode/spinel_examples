@@ -45,6 +45,8 @@ USAGE = "Usage: od [OPTION]... [FILE]...\n" \
         "  -t TYPE   format: a c d[N] o[N] u[N] x[N] (can repeat)\n" \
         "  -v        do not suppress duplicate output lines\n" \
         "  -w N      bytes per line (default 16)\n" \
+        "  -S BYTES  output strings of at least BYTES printable chars (default 3)\n" \
+        "  --strings[=BYTES]  same as -S\n" \
         "  -b/-c/-d/-o/-x/-s/-i  format shortcuts\n" \
         "  --help"
 
@@ -57,15 +59,16 @@ class OdFormat
 end
 
 class OdOptions
-  attr_accessor :addr_radix, :skip, :count, :formats, :verbose, :width, :big_endian
+  attr_accessor :addr_radix, :skip, :count, :formats, :verbose, :width, :big_endian, :strings_min
   def initialize
-    @addr_radix = "o"
-    @skip       = 0
-    @count      = nil
-    @formats    = []
-    @verbose    = false
-    @width      = 16
-    @big_endian = false
+    @addr_radix  = "o"
+    @skip        = 0
+    @count       = nil
+    @formats     = []
+    @verbose     = false
+    @width       = 16
+    @big_endian  = false
+    @strings_min = nil
     @formats.push(OdFormat.new("o", 2))
     @formats.pop
   end
@@ -161,6 +164,16 @@ def parse_argv(argv)
       opts.formats.push(OdFormat.new("d", 2))
     elsif arg == "-i"
       opts.formats.push(OdFormat.new("d", 4))
+    elsif arg == "-S" || arg == "--strings"
+      if index + 1 < argv.length && argv[index + 1].length > 0 && "0123456789".include?(argv[index + 1][0])
+        index += 1; opts.strings_min = argv[index].to_i
+      else
+        opts.strings_min = 3
+      end
+    elsif arg.length > 2 && arg[0, 2] == "-S"
+      opts.strings_min = arg[2, arg.length - 2].to_i
+    elsif arg.length > 10 && arg[0, 10] == "--strings="
+      opts.strings_min = arg[10, arg.length - 10].to_i
     elsif arg == "--endian=big"
       opts.big_endian = true
     elsif arg == "--endian=little"
@@ -418,6 +431,30 @@ def format_chunk(bytes, offset, size, fmt, big_endian)
   end
 end
 
+def dump_strings(data, min_len, addr_radix)
+  bytes = data.bytes
+  total = bytes.length
+  run_start = -1
+  i = 0
+  while i <= total
+    b = i < total ? bytes[i] : -1
+    printable = b >= 0x20 && b <= 0x7e
+    if printable
+      run_start = i if run_start < 0
+    else
+      if run_start >= 0 && (i - run_start) >= min_len
+        addr_str = format_addr(run_start, addr_radix)
+        s = ""
+        j = run_start
+        while j < i; s = s + bytes[j].chr; j += 1; end
+        puts addr_str + " " + s
+      end
+      run_start = -1
+    end
+    i += 1
+  end
+end
+
 def dump_data(data, opts)
   bytes = data.bytes
   total = bytes.length
@@ -501,5 +538,9 @@ end
 data = data[opts.skip, data.length - opts.skip] || ""
 data = data[0, opts.count] if !opts.count.nil?
 
-dump_data(data, opts)
+if opts.strings_min
+  dump_strings(data, opts.strings_min, opts.addr_radix)
+else
+  dump_data(data, opts)
+end
 exit exit_code

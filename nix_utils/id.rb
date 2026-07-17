@@ -69,6 +69,8 @@ def parse_argv(argv)
         elsif letter == "n"; opts.use_name = true
         elsif letter == "r"; opts.use_real = true
         elsif letter == "z"; opts.zero = true
+        elsif letter == "a"
+          # ignored for compatibility
         else
           STDERR.puts "id: invalid option -- '#{letter}'"; exit 1
         end

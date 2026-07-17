@@ -7,9 +7,11 @@
 #   -a           change only the access time
 #   -m           change only the modification time
 #   -c, --no-create  do not create any files
+#   -h, --no-dereference  affect the symlink itself, not its target
 #   -t STAMP     use [[CC]YY]MMDDhhmm[.ss] instead of current time
 #   -d STRING    parse STRING as a date/time (basic ISO 8601 and common forms)
 #   -r FILE      use this file's times instead of current time
+#   --time=WORD  change time: access/atime/use (same as -a) or modify/mtime (same as -m)
 #   --help       usage
 #
 # Compile: spinel nix_utils/touch.rb -o nix_utils/bin/touch
@@ -25,17 +27,20 @@ USAGE = "Usage: touch [OPTION]... FILE...\n" \
         "  -a           change only access time\n" \
         "  -m           change only modification time\n" \
         "  -c           do not create files\n" \
+        "  -h           affect symlink itself, not its target\n" \
         "  -r FILE      use FILE's times instead of current time\n" \
         "  -t STAMP     [[CC]YY]MMDDhhmm[.ss] timestamp\n" \
         "  -d STRING    date/time string (basic ISO 8601)\n" \
+        "  --time=WORD  access/atime/use (like -a) or modify/mtime (like -m)\n" \
         "  --help"
 
 class TouchOptions
-  attr_accessor :access_only, :mod_only, :no_create, :ref_file, :time
+  attr_accessor :access_only, :mod_only, :no_create, :no_deref, :ref_file, :time
   def initialize
     @access_only = false
     @mod_only    = false
     @no_create   = false
+    @no_deref    = false
     @ref_file    = nil
     @time        = nil   # nil = current time
   end
@@ -119,6 +124,18 @@ def parse_argv(argv)
       exit 0
     elsif arg == "--no-create"
       opts.no_create = true
+    elsif arg == "-h" || arg == "--no-dereference"
+      opts.no_deref = true
+    elsif arg.length > 7 && arg[0, 7] == "--time="
+      word = "" + arg[7, arg.length - 7]
+      if word == "access" || word == "atime" || word == "use"
+        opts.access_only = true
+      elsif word == "modify" || word == "mtime"
+        opts.mod_only = true
+      else
+        STDERR.puts "touch: invalid argument '#{word}' for '--time'"
+        exit 1
+      end
     elsif arg == "-r" || arg == "--reference"
       index += 1
       opts.ref_file = argv[index]
@@ -143,6 +160,8 @@ def parse_argv(argv)
           opts.mod_only = true
         elsif letter == "c"
           opts.no_create = true
+        elsif letter == "h"
+          opts.no_deref = true
         elsif letter == "f"
           # GNU: -f is obsolete, silently ignored
         else
@@ -184,6 +203,7 @@ elsif opts.time
 end
 touch_flags = touch_flags + " -a" if opts.access_only
 touch_flags = touch_flags + " -m" if opts.mod_only
+touch_flags = touch_flags + " -h" if opts.no_deref
 
 exit_code = 0
 files.each do |name|

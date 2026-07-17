@@ -12,7 +12,7 @@
 #   -q, --quiet          never print file-name headers
 #   -v, --verbose        always print file-name headers
 #   --help               usage
-# The short forms also accept an attached value, e.g. -n5 or -c-3.
+# Short forms also accept an attached value, e.g. -n5 or -c-3.
 #
 # Compile: spinel nix_utils/head.rb -o nix_utils/bin/head
 # Run:
@@ -29,20 +29,18 @@ USAGE = "Usage: head [OPTION]... [FILE]...\n" \
         "  -n [-]NUM   first NUM lines (or all but last NUM)\n" \
         "  -c [-]NUM   first NUM bytes (or all but last NUM)\n" \
         "  -q  never print headers   -v  always print headers\n" \
-        "  -z  NUL-delimited lines\n" \
         "  NUM suffixes: b 512, kB 1000, K/KiB 1024, MB 1000^2, M/MiB 1024^2\n" \
         "  --help"
 
 # Options for a head run.
 class HeadOptions
-  attr_accessor :count, :from_end, :by_bytes, :quiet, :verbose, :zero
+  attr_accessor :count, :from_end, :by_bytes, :quiet, :verbose
   def initialize
     @count    = 10
     @from_end = false
     @by_bytes = false
     @quiet    = false
     @verbose  = false
-    @zero     = false
   end
 end
 
@@ -116,8 +114,6 @@ def parse_argv(argv)
       opts.quiet = true
     elsif arg == "-v" || arg == "--verbose"
       opts.verbose = true
-    elsif arg == "-z" || arg == "--zero-terminated"
-      opts.zero = true
     elsif arg == "-n" || arg == "--lines"
       index += 1
       set_count(argv[index], "lines", opts)
@@ -174,21 +170,7 @@ def byte_head(content, opts)
 end
 
 def line_head(content, opts)
-  delim = opts.zero ? "\0" : "\n"
-  if delim == "\n"
-    lines = content.lines
-  else
-    lines = content.split(delim, -1)
-    # Re-attach the delimiter so slices are self-contained, matching lines behavior.
-    i = 0
-    while i < lines.length - 1
-      lines[i] = lines[i] + delim
-      i += 1
-    end
-    # The last element has no trailing delim if content didn't end with one;
-    # if content DID end with delim, split produces a trailing "" we drop.
-    lines.pop if !lines.empty? && lines.last == ""
-  end
+  lines = content.lines
   if opts.from_end
     keep = lines.length - opts.count
     keep = 0 if keep < 0

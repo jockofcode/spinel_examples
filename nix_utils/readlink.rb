@@ -29,7 +29,7 @@ USAGE = "Usage: readlink [OPTION]... FILE...\n" \
         "  --help"
 
 class ReadlinkOptions
-  attr_accessor :canonicalize, :must_exist, :allow_missing, :no_newline, :quiet, :zero
+  attr_accessor :canonicalize, :must_exist, :allow_missing, :no_newline, :quiet, :zero, :verbose
   def initialize
     @canonicalize  = false
     @must_exist    = false
@@ -37,6 +37,7 @@ class ReadlinkOptions
     @no_newline    = false
     @quiet         = false
     @zero          = false
+    @verbose       = false
   end
 end
 
@@ -62,6 +63,8 @@ def parse_argv(argv)
       opts.no_newline = true
     elsif arg == "-q" || arg == "--quiet" || arg == "--silent"
       opts.quiet = true
+    elsif arg == "-v" || arg == "--verbose"
+      opts.verbose = true
     elsif arg == "-z" || arg == "--zero"
       opts.zero = true
     else
@@ -74,6 +77,7 @@ def parse_argv(argv)
         elsif letter == "m"; opts.canonicalize = true; opts.allow_missing = true
         elsif letter == "n"; opts.no_newline = true
         elsif letter == "q"; opts.quiet = true
+        elsif letter == "v"; opts.verbose = true
         elsif letter == "z"; opts.zero = true
         else
           STDERR.puts "readlink: invalid option -- '#{letter}'"; exit 1

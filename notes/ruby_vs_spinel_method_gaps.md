@@ -196,6 +196,7 @@ methods, but not all.
 | Shellwords helpers | `shellescape`, `shellsplit` |
 | Ruby conversion hooks | `String.try_convert`, some `to_str` coercion cases |
 | Binary-safe text transforms | Embedded-NUL strings are byte-exact for core storage, but many transforms/searches still stop at the C NUL |
+| NUL as a stream delimiter | Writing NUL bytes to stdout or using `"\0"` as a line separator is impossible — see below |
 
 Probe examples:
 
@@ -206,6 +207,46 @@ Probe examples:
 ./spinel -E -e 'puts "a b".shellescape'
 # unsupported puts argument: CallNode `shellescape`
 ```
+
+### NUL Bytes as Stream Delimiters — Fundamentally Unsupported
+
+Spinel compiles Ruby to C. In C, strings are NUL-terminated: the byte `\0`
+marks the end of a character array, so it can never appear as content within
+one. This has a concrete consequence for any feature that treats NUL as a
+record separator rather than a string terminator:
+
+- **`STDOUT.write("\0")`** — the NUL byte is swallowed; nothing is written.
+- **`content.split("\0")`** — splits only on the first NUL and discards
+  everything after it, because the underlying C string already ends there.
+- **`content.lines` with NUL-delimited data** — returns the entire input as a
+  single "line" up to the first NUL.
+
+The `-z` / `--zero-terminated` flag found in GNU coreutils (`head -z`,
+`tail -z`, `grep -z`, `sort -z`, etc.) uses NUL as the line delimiter so that
+filenames or records containing newlines can be processed safely. **This flag
+cannot be implemented in a Spinel-compiled binary.** It is not a missing
+feature that could be added later with more effort — the limitation is
+structural: the C runtime itself prevents NUL from appearing in any string
+value or being written to standard output.
+
+#### What this means for nix_utils
+
+The `-z` option was implemented in `head.rb` and `tail.rb` during initial
+development and included in the test suite. The tests failed 100% of the time
+under Spinel because the NUL delimiter could never be written to stdout. Rather
+than leave permanently broken tests, the option was removed entirely:
+
+- `head.rb` — `-z` / `--zero-terminated` removed; `line_head` simplified to
+  always split on `"\n"`.
+- `tail.rb` — `-z` / `--zero-terminated` removed; `split_lines` /
+  `rejoin_lines` simplified to always use `"\n"`.
+
+The two corresponding test cases (`head -z NUL delimited`,
+`tail -z NUL delimited`) were dropped from `tests/nix_utils_test.sh`. All
+remaining tests pass under Spinel.
+
+Other tools in the suite (`grep -z`, `sort -z`, `cut -z`, etc.) do not
+advertise a `-z` flag in their man pages for this project for the same reason.
 
 ### Available With Caveats
 

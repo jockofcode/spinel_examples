@@ -570,6 +570,292 @@ rn id "-u"
 ck "id -u prints numeric uid"
 
 # ──────────────────────────────────────────────────────────────────
+# logname
+# ──────────────────────────────────────────────────────────────────
+rn logname ""
+grep -q '.' "$ACT" && r=true || r=false
+cke "logname returns non-empty username" true "$r"
+# logname output should match $USER
+printf '%s\n' "${LOGNAME:-$USER}" >"$EXP"
+rn logname ""
+ck "logname matches LOGNAME/USER"
+
+# ──────────────────────────────────────────────────────────────────
+# printenv
+# ──────────────────────────────────────────────────────────────────
+rn printenv ""
+grep -q '=' "$ACT" && r=true || r=false; cke "printenv lists variables" true "$r"
+grep -q 'HOME=' "$ACT" && r=true || r=false; cke "printenv output contains HOME=" true "$r"
+printf '%s\n' "$HOME" >"$EXP"
+rn printenv "HOME"
+ck "printenv HOME prints value"
+# non-existent variable exits 1
+eval "$RUBY '$(tool printenv)' DEFINITELY_NOT_SET_VAR_XYZ123" >/dev/null 2>&1; rc=$?
+cke "printenv missing var exit code" 1 "$rc"
+
+# ──────────────────────────────────────────────────────────────────
+# tsort
+# ──────────────────────────────────────────────────────────────────
+# Simple DAG: a->b, b->c, a->c; expected order: a b c (or a c b)
+exp 'a\nb\nc\n'; rp tsort 'a b\nb c\na c\n'; ck "tsort basic DAG"
+# Self-loop (same token twice) should not crash
+rp tsort 'a a\n'
+[ -n "$(cat "$ACT")" ] && r=true || r=false; cke "tsort self-loop outputs something" true "$r"
+
+# ──────────────────────────────────────────────────────────────────
+# factor
+# ──────────────────────────────────────────────────────────────────
+exp '12: 2 2 3\n'; rn factor "12"; ck "factor 12"
+exp '1: \n'; rn factor "1"; ck "factor 1"
+exp '2: 2\n'; rn factor "2"; ck "factor 2 (prime)"
+exp '12: 2^2 3\n'; rn factor "-h 12"; ck "factor --exponents 12"
+# Large prime
+rn factor "97"
+grep -q '97: 97' "$ACT" && r=true || r=false; cke "factor 97 is prime" true "$r"
+# stdin mode
+exp '7: 7\n'; rp factor '7\n'; ck "factor from stdin"
+
+# ──────────────────────────────────────────────────────────────────
+# nproc
+# ──────────────────────────────────────────────────────────────────
+rn nproc ""
+n=$(cat "$ACT" | tr -d '\n')
+[ "$n" -ge 1 ] 2>/dev/null && r=true || r=false
+cke "nproc returns positive integer" true "$r"
+rn nproc "--all"
+n=$(cat "$ACT" | tr -d '\n')
+[ "$n" -ge 1 ] 2>/dev/null && r=true || r=false
+cke "nproc --all returns positive integer" true "$r"
+# --ignore=N reduces the count (minimum 1)
+rn nproc "--ignore=9999"
+cke "nproc --ignore=9999 is 1" 1 "$(cat "$ACT" | tr -d '\n')"
+
+# ──────────────────────────────────────────────────────────────────
+# realpath
+# ──────────────────────────────────────────────────────────────────
+# existing path resolves — use system realpath for canonical expected value
+rp_dir="$TMP/rp_dir"; mkdir -p "$rp_dir"
+# Get the canonical path using the system realpath (handles macOS symlinks in /var→/private/var)
+rp_expected="$(cd "$rp_dir" && pwd -P)"
+printf '%s\n' "$rp_expected" >"$EXP"
+rn realpath "'$rp_dir'"
+ck "realpath existing dir"
+# -m allows missing — just check exit code is 0 and output is non-empty
+rn realpath "-m '$rp_dir/nonexistent'"
+[ -s "$ACT" ] && r=true || r=false; cke "realpath -m missing path produces output" true "$r"
+# -e on missing exits non-zero
+eval "$RUBY '$(tool realpath)' -e '$rp_dir/nonexistent'" >/dev/null 2>&1; rc=$?
+cke "realpath -e missing exits non-zero" 1 "$rc"
+rm -rf "$rp_dir"
+
+# ──────────────────────────────────────────────────────────────────
+# mktemp
+# ──────────────────────────────────────────────────────────────────
+rn mktemp ""
+tf=$(cat "$ACT" | tr -d '\n')
+[ -f "$tf" ] && r=true || r=false; cke "mktemp creates file" true "$r"
+rm -f "$tf"
+# -d creates directory
+rn mktemp "-d"
+td=$(cat "$ACT" | tr -d '\n')
+[ -d "$td" ] && r=true || r=false; cke "mktemp -d creates directory" true "$r"
+rm -rf "$td"
+# --dry-run does not create file
+rn mktemp "-u"
+tf=$(cat "$ACT" | tr -d '\n')
+[ ! -f "$tf" ] && r=true || r=false; cke "mktemp -u does not create file" true "$r"
+# template respected
+rn mktemp "mytest.XXXXXXXX"
+tf=$(cat "$ACT" | tr -d '\n')
+tf_base=$(basename "$tf")
+echo "$tf_base" | grep -q '^mytest\.' && r=true || r=false; cke "mktemp template prefix" true "$r"
+rm -f "$tf"
+
+# ──────────────────────────────────────────────────────────────────
+# base64
+# ──────────────────────────────────────────────────────────────────
+# round-trip encode/decode
+rp base64 'hello world\n'
+encoded=$(cat "$ACT" | tr -d '\n')
+printf '%s\n' "$encoded" | eval "$RUBY '$(tool base64)' -d" >"$ACT"
+exp 'hello world\n'; ck "base64 encode/decode round-trip"
+# wrap at 40
+rp base64 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n' '-w 40'
+first_line=$(head -1 "$ACT")
+[ "${#first_line}" -le 40 ] && r=true || r=false; cke "base64 -w 40 wraps at 40" true "$r"
+
+# ──────────────────────────────────────────────────────────────────
+# sha256sum
+# ──────────────────────────────────────────────────────────────────
+# Known SHA256 of empty string
+empty_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+tf_empty="$TMP/sha256_empty"
+printf '' >"$tf_empty"
+rn sha256sum "'$tf_empty'"
+grep -q "$empty_sha256" "$ACT" && r=true || r=false; cke "sha256sum empty file" true "$r"
+# -c verify passes
+rn sha256sum "'$tf_empty'" > "$TMP/sha256_check"
+rn sha256sum "-c '$TMP/sha256_check'"
+grep -q 'OK' "$ACT" && r=true || r=false; cke "sha256sum -c verify OK" true "$r"
+# -c verify fails for wrong checksum
+printf '%s  %s\n' "0000000000000000000000000000000000000000000000000000000000000000" "$tf_empty" >"$TMP/sha256_bad"
+eval "$RUBY '$(tool sha256sum)' -c '$TMP/sha256_bad'" >"$ACT" 2>/dev/null; rc=$?
+cke "sha256sum -c verify FAIL exits non-zero" 1 "$rc"
+rm -f "$tf_empty"
+
+# ──────────────────────────────────────────────────────────────────
+# md5sum
+# ──────────────────────────────────────────────────────────────────
+empty_md5="d41d8cd98f00b204e9800998ecf8427e"
+tf_md5="$TMP/md5_empty"; printf '' >"$tf_md5"
+rn md5sum "'$tf_md5'"
+grep -q "$empty_md5" "$ACT" && r=true || r=false; cke "md5sum empty file" true "$r"
+rm -f "$tf_md5"
+
+# ──────────────────────────────────────────────────────────────────
+# cksum
+# ──────────────────────────────────────────────────────────────────
+tf_ck="$TMP/cksum_test"; printf 'hello\n' >"$tf_ck"
+rn cksum "'$tf_ck'"
+[ -n "$(cat "$ACT")" ] && r=true || r=false; cke "cksum default CRC produces output" true "$r"
+# -a md5 should match md5sum
+rn cksum "-a md5 '$tf_ck'"
+rn md5sum "'$tf_ck'" > "$TMP/cksum_md5ref"
+cksum_hash=$(cat "$ACT" | awk '{print $1}')
+md5_hash=$(cat "$TMP/cksum_md5ref" | awk '{print $1}')
+cke "cksum -a md5 matches md5sum" "$md5_hash" "$cksum_hash"
+rm -f "$tf_ck"
+
+# ──────────────────────────────────────────────────────────────────
+# split
+# ──────────────────────────────────────────────────────────────────
+split_dir="$TMP/split_$$"; mkdir "$split_dir"
+# 10 lines, split into 3-line pieces
+printf '%s\n' 1 2 3 4 5 6 7 8 9 10 >"$split_dir/input"
+rn split "-l 3 '$split_dir/input' '$split_dir/out'"
+file_count=$(ls "$split_dir"/out* 2>/dev/null | wc -l | tr -d ' ')
+cke "split -l 3 creates 4 files" 4 "$file_count"
+# reassembly matches original
+cat "$split_dir"/out* >"$split_dir/reassembled"
+diff "$split_dir/input" "$split_dir/reassembled" >/dev/null && r=true || r=false
+cke "split reassembly matches original" true "$r"
+# byte split
+printf 'abcdefghij' >"$split_dir/bytes"
+rn split "-b 3 '$split_dir/bytes' '$split_dir/bsplit'"
+bc=$(ls "$split_dir"/bsplit* 2>/dev/null | wc -l | tr -d ' ')
+cke "split -b 3 creates 4 files" 4 "$bc"
+rm -rf "$split_dir"
+
+# ──────────────────────────────────────────────────────────────────
+# numfmt
+# ──────────────────────────────────────────────────────────────────
+exp '1.0k\n'; rp numfmt '1000\n' '--to=si'; ck "numfmt 1000 to si"
+# IEC input
+exp '1024\n'; rp numfmt '1K\n' '--from=iec'; ck "numfmt 1K from iec"
+# SI input
+exp '1000\n'; rp numfmt '1k\n' '--from=si'; ck "numfmt 1k from si"
+
+# ──────────────────────────────────────────────────────────────────
+# date
+# ──────────────────────────────────────────────────────────────────
+rn date "+%Y"
+year=$(cat "$ACT" | tr -d '\n')
+[ "$year" -ge 2024 ] 2>/dev/null && r=true || r=false
+cke "date +%Y outputs current year" true "$r"
+# --utc flag
+rn date "--utc +%Z"
+grep -qE '^UTC$' "$ACT" && r=true || r=false; cke "date --utc +%Z is UTC" true "$r"
+# -r reference file
+rn date "-r '$TMP' +%Y"
+year2=$(cat "$ACT" | tr -d '\n')
+[ "$year2" -ge 2020 ] 2>/dev/null && r=true || r=false; cke "date -r FILE prints year" true "$r"
+# ISO 8601
+rn date "-I"
+grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' "$ACT" && r=true || r=false
+cke "date -I outputs ISO date" true "$r"
+
+# ──────────────────────────────────────────────────────────────────
+# du
+# ──────────────────────────────────────────────────────────────────
+du_dir="$TMP/du_$$"; mkdir "$du_dir"; printf 'hello\n' >"$du_dir/file"
+rn du "'$du_dir'"
+[ -n "$(cat "$ACT")" ] && r=true || r=false; cke "du produces output" true "$r"
+# -s summarizes to one line
+rn du "-s '$du_dir'"
+line_count=$(wc -l <"$ACT" | tr -d ' ')
+cke "du -s gives one line" 1 "$line_count"
+# -h uses human suffixes
+rn du "-h '$du_dir'"
+grep -qE '[0-9]+[KMGT]?' "$ACT" && r=true || r=false; cke "du -h uses suffixes" true "$r"
+rm -rf "$du_dir"
+
+# ──────────────────────────────────────────────────────────────────
+# column
+# ──────────────────────────────────────────────────────────────────
+# free-flow mode aligns into columns
+rp column 'alpha\nbeta\ngamma\ndelta\n'
+[ -n "$(cat "$ACT")" ] && r=true || r=false; cke "column free-flow produces output" true "$r"
+# -t table mode
+rp column 'a:b:c\n1:2:3\n' '-t -s:'
+grep -q 'a' "$ACT" && grep -q 'b' "$ACT" && r=true || r=false
+cke "column -t -s: aligns table" true "$r"
+# colon delimiter
+rp column 'x:y:z\n1:2:3\n' '-t -s: -o"|"'
+grep -q '|' "$ACT" && r=true || r=false; cke "column -o sets output separator" true "$r"
+
+# ──────────────────────────────────────────────────────────────────
+# xargs
+# ──────────────────────────────────────────────────────────────────
+exp 'a b c\n'; rp xargs 'a b c\n' 'echo'; ck "xargs basic echo"
+# -n 1: each arg gets its own echo invocation (flags come before command)
+rp xargs 'a b c\n' '-n 1 echo'
+line_count=$(wc -l <"$ACT" | tr -d ' ')
+cke "xargs -n 1 runs once per token" 3 "$line_count"
+# -I {} replace mode (flag comes before command)
+rp xargs 'world\n' "-I{} echo 'hello {}'"
+grep -q 'hello world' "$ACT" && r=true || r=false; cke "xargs -I{} replace mode" true "$r"
+# -r no-run-if-empty (flag comes before command)
+rp xargs '' '-r echo'
+[ ! -s "$ACT" ] && r=true || r=false; cke "xargs -r empty input: no output" true "$r"
+
+# ──────────────────────────────────────────────────────────────────
+# sed
+# ──────────────────────────────────────────────────────────────────
+exp 'heLLo\n'; rp sed 'hello\n' "'s/l/L/g'"; ck "sed s/l/L/g"
+exp 'hello\n'; rp sed 'hello\n' "-n 'p'"; ck "sed -n p prints pattern space"
+# address range
+exp 'B\nC\n'; rp sed 'A\nB\nC\n' "'2,3p' -n"; ck "sed 2,3p address range"
+# d command
+exp 'A\nC\n'; rp sed 'A\nB\nC\n' "'2d'"; ck "sed 2d delete line"
+# y transliterate
+exp 'HELLO\n'; rp sed 'hello\n' "'y/helo/HELO/'"; ck "sed y transliterate"
+# in-place test with temp file
+printf 'foo\n' >"$TMP/sed_inplace"
+rn sed "'-i' 's/foo/bar/' '$TMP/sed_inplace'"
+exp 'bar\n'; cat "$TMP/sed_inplace" >"$ACT"; ck "sed -i in-place"
+rm -f "$TMP/sed_inplace"
+
+# ──────────────────────────────────────────────────────────────────
+# find
+# ──────────────────────────────────────────────────────────────────
+find_dir="$TMP/find_$$"; mkdir -p "$find_dir/sub"
+printf 'data\n' >"$find_dir/file.rb"
+printf 'data\n' >"$find_dir/sub/other.txt"
+# -name "*.rb" matches
+rn find "'$find_dir' -name '*.rb'"
+grep -q 'file.rb' "$ACT" && r=true || r=false; cke "find -name *.rb matches" true "$r"
+# -type d lists directories
+rn find "'$find_dir' -type d"
+grep -q 'sub' "$ACT" && r=true || r=false; cke "find -type d lists dirs" true "$r"
+# -maxdepth 1 doesn't recurse into sub
+rn find "'$find_dir' -maxdepth 1"
+grep -q 'other.txt' "$ACT" && r=false || r=true; cke "find -maxdepth 1 no recurse" true "$r"
+# -exec echo {} ;
+rn find "'$find_dir' -maxdepth 1 -name '*.rb' -exec echo {} ;"
+grep -q 'file.rb' "$ACT" && r=true || r=false; cke "find -exec echo works" true "$r"
+rm -rf "$find_dir"
+
+# ──────────────────────────────────────────────────────────────────
 # Summary
 # ──────────────────────────────────────────────────────────────────
 if [ "$failures" -eq 0 ]; then

@@ -1,0 +1,38 @@
+LOGNAME(1)                        User Commands                       LOGNAME(1)
+
+NAME
+       logname - print user´s login name
+
+SYNOPSIS
+       logname [OPTION]
+
+DESCRIPTION
+       Print the user's login name.
+
+       --help display this help and exit
+
+       --version
+              output version information and exit
+
+AUTHOR
+       Written by David MacKenzie.
+
+REPORTING BUGS
+       Report bugs to: bug-coreutils@gnu.org
+       GNU coreutils home page: <https://www.gnu.org/software/coreutils/>
+       General help using GNU software: <https://www.gnu.org/gethelp/>
+       Report any translation bugs to <https://translationproject.org/team/>
+
+COPYRIGHT
+       Copyright © 2026 Free Software Foundation, Inc.  License GPLv3+: GNU GPL
+       version 3 or later <https://gnu.org/licenses/gpl.html>.
+       This is free software: you are free to change and redistribute it.  There
+       is NO WARRANTY, to the extent permitted by law.
+
+SEE ALSO
+       getlogin(3)
+
+       Full documentation <https://www.gnu.org/software/coreutils/logname>
+       or available locally via: info '(coreutils) logname invocation'
+
+GNU coreutils 9.11                 April 2026                         LOGNAME(1)

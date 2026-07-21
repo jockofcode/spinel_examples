@@ -4,8 +4,8 @@
 # index.html is served (200), a real file downloads, a missing path is 404,
 # a path-traversal attempt is safely 404, and --no-index forces a directory
 # listing instead of index.html. Runs against BOTH the compiled Spinel binary
-# (bin/fyel_srvr) and the CRuby source (via socket_shim), each on its own port,
-# proving dual-runtime parity.
+# (bin/fyel_srvr) and the CRuby source, each on its own port, proving
+# dual-runtime parity.
 #
 # Usage: sh tests/fyel_srvr_test.sh
 # Requires curl. Exit 0 and "fyel_srvr: ALL GREEN" only if every check passed.
@@ -88,7 +88,7 @@ run_suite() {
 
 echo "== fyel_srvr: native binary =="
 run_suite bin 8271
-echo "== fyel_srvr: CRuby source (via socket_shim) =="
+echo "== fyel_srvr: CRuby source =="
 run_suite cruby 8272
 
 echo ""

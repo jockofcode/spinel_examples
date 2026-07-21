@@ -3,8 +3,7 @@
 # The final step of the FyelSrvr progression: serves files and directory
 # listings with content-type detection, download dispositions, parent-dir
 # links, file sizes, an optional index.html handoff, and path-traversal
-# defense. Networking comes from lib/socket_shim.rb, which presents a Ruby-shaped
-# TCPServer over Spinel's sp_net FFI (and the real socket library under CRuby).
+# defense.
 #
 # Compile: spinel source/fyel_srvr_6.rb -o bin/fyel_srvr
 # Run:     ./bin/fyel_srvr -p 8080 [--no-index]
@@ -228,7 +227,6 @@ def start_server(port, serve_index)
   begin
     TCPServer.open("0.0.0.0", port) do |server|
       puts "Static file server running natively."
-
       loop do
         respond_to_client(server.accept, serve_index)
       end

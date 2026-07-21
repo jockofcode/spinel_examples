@@ -58,7 +58,7 @@ Use this as the quick decision map for writing examples:
 | `optparse` | Currently broken — `parse!` fails at C compile time even with boolean-only flags; use a manual `ARGV` loop |
 | `send`, `public_send`, `respond_to?`, `method(:name)`, `&:sym`, `obj.method(:name).call` | Work when method name is a compile-time literal |
 | Lazy enumerators | Work: `(1..Float::INFINITY).lazy.select {...}.first(n)` confirmed |
-| Socket/network helpers | `lib/socket_shim.rb` provides a small `TCPServer`/`TCPSocket` layer over Spinel's `sp_net` helpers |
+| Socket/network helpers | `require "socket"` provides `TCPServer`/`TCPSocket` natively; `TCPServer.open` block form does NOT work; `readpartial(n)` blocks until peer closes (FIN) — not suitable for HTTP servers; `lib/socket_shim.rb` still needed for HTTP servers (uses `sp_net_recv_some`) and for raw `Socket`, `UDPSocket`, `UNIXSocket` |
 | Reflection and metaprogramming | Mostly unavailable or only works with compile-time literals |
 | Full Ruby stdlib (`date`, `net/*`, `securerandom`, `yaml`, `csv`, `fileutils`, `pp`, `uri`, `cgi`, `socket`) | Not available unless Spinel provides a package |
 | Encoding/transcoding/unicode normalization | Unavailable; Spinel assumes UTF-8 / ASCII-8BIT boundaries |
@@ -170,6 +170,7 @@ spinel -E -e 'puts $:.class'
 
 Use `SPINEL_REQUIRE_GATE=1` when running programs that contain `require`:
 
+- `socket` — provides `TCPServer`/`TCPSocket` natively; `TCPServer.new` works but `TCPServer.open` block form does NOT; `readpartial(n)` blocks until peer sends FIN (not suitable for HTTP servers); `recv` is not available on native sockets; raw `Socket`, `UDPSocket`, `UNIXSocket` are NOT included — use `lib/socket_shim.rb` for HTTP servers and for the missing socket classes
 - `json`
 - `base64`
 - `digest`
@@ -225,7 +226,7 @@ Common libraries that Ruby programmers reach for but Spinel does not ship:
 - `observer`
 - `singleton`
 - `net/http`, `net/protocol`, and other `net/*` libraries
-- `socket`
+- `socket` — see "Require Works" section above; natively available but with significant limitations for server use
 - `uri`
 - `cgi`
 - `erb` (loads but crashes at compile)
@@ -329,15 +330,20 @@ helper, then passed to another helper) raised `undefined method 'index'` /
 Confirmed on such a poly string:
 
 - Works: `#length`, single-index `#[]` (e.g. `token[char_index]`), `==`,
-  `#start_with?`, string concatenation (`user + char`), and `#dup`.
+  `#start_with?`, string concatenation (`user + char`). `#dup` compiles and
+  runs but returns another `sp_RbVal` — it does not restore the missing methods
+  (see coercion section below).
 - Fails at runtime: `#index`, `#split`, and range/`begin...end` slicing
   (`token[0...n]`, `token[char_index..-1]` returned a single character instead
   of a substring).
 
 The failure is context-dependent: the same helper compiles and runs correctly
 in a small standalone probe but fails inside the full program, because
-whole-program inference degrades the variable's static type. `value.dup`
-materializes a runtime `String` but does **not** restore the missing methods.
+whole-program inference degrades the variable's static type.
+
+If a function only needs `#length`, `#[]`, `==`, and concatenation, no
+coercion is required — use the poly string directly. `.dup` is unnecessary
+in that case and can be removed safely.
 
 Workaround: parse the poly string with a manual character loop that relies only
 on `#length`, single-index `#[]`, `==`, and concatenation — e.g. to split
@@ -457,7 +463,7 @@ yields sp_RbVal even if `sort_keys` is a typed SortKey array. Instead, inline
 the fields directly on the options object: `opts.sk_field`, `opts.sk_numeric`,
 `opts.sk_fold_case`, etc.
 
-### AOT compile-time type coercion: `"" + s` not `s.dup`
+### AOT compile-time type coercion: `"" + s` or `"#{s}"`, not `s.dup`
 
 When a string crosses a function boundary (e.g. ARGV elements, array index
 access like `files[0]`, or range slices like `s[2, s.length - 2]`), Spinel
@@ -468,19 +474,30 @@ types the value as `sp_RbVal`. Passing it to `File.read`, `File.exist?`,
 error: passing 'sp_RbVal' to parameter of incompatible type 'const char *'
 ```
 
-**Correct coercion idiom — `"" + s`:**
+**Correct coercion idioms:**
+
+`"" + s` — typed receiver forces the result to `const char *`:
 ```ruby
 cname = "" + name   # sp_RbVal → const char*
 File.exist?(cname)  # now OK
 ```
 
-This works because the receiver `""` is a typed `const char *`, so Spinel
-resolves `String#+(sp_RbVal)` to the typed overload that returns `const char *`.
+`"#{s}"` — string interpolation also coerces; confirmed in `source/parallel_digest.rb`
+where `queue.pop` returns `sp_RbVal` and `File.read` needs `const char *`:
+```ruby
+path = "#{item}"      # sp_RbVal → const char*
+File.read(path)       # now OK
+```
+
+Both idioms work. `"" + s` is explicit about intent; `"#{s}"` is natural when
+building a string anyway (e.g. `"#{dir}/#{name}"`).
 
 **Why `s.dup` does NOT coerce:** when `s` is `sp_RbVal`, `s.dup` returns
-`sp_RbVal` (dynamic dispatch keeps the poly type). By contrast, `"" + s` uses
-a typed receiver so the return type is known statically. `s.dup` is fine when
-`s` is already a typed `const char *`.
+`sp_RbVal` (dynamic dispatch keeps the poly type). Confirmed by removing
+`.dup` from loops in `parallel_digest.rb` and `token_api.rb` — the binaries
+compiled and produced identical output, because those loops only call `#length`,
+`#[]`, `==`, and concatenation, which dispatch correctly on poly strings.
+Only use `.dup` when `s` is already a typed `const char *` and you need a copy.
 
 **Other coercion patterns:**
 - `"" + s[n, len]` — range slices also produce `sp_RbVal`; wrap in `"" + `
@@ -780,7 +797,7 @@ Prefer these because they are supported and already fit Spinel's design:
 - Tokenizing/parsing: `require "strscan"`
 - Sets: `require "set"`
 - Static file work: `File.read`, `File.write`, `File.exist?`, `File.directory?`, `File.file?`, `File.size`, `File.join`, `File.basename`, `File.dirname`, `File.expand_path`
-- Networking: use `lib/socket_shim.rb` for `TCPServer` / accepted socket methods
+- Networking: `require "socket"` gives native `TCPServer`/`TCPSocket` but `readpartial(n)` blocks until FIN — not usable for HTTP servers; use `lib/socket_shim.rb` for HTTP servers (its `recv` calls `sp_net_recv_some` which returns available data immediately) and for raw `Socket`, `UDPSocket`, `UNIXSocket`
 - Reflection: use `send(:method_name)` with literal symbol names; `obj.method(:name).call`; `obj.respond_to?(:name)`; `&:method_name`
 - Process info: `` `id -u`.strip.to_i `` instead of `Process.uid`
 

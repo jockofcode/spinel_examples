@@ -81,7 +81,6 @@ def verify_token(token)
   # so we walk it one character at a time: everything before the first "." is
   # the user, everything after is the signature. Building the two parts by
   # char-concatenation keeps us on the operations that dispatch reliably.
-  token = token.dup
   length = token.length
   user = ""
   sig = ""
@@ -192,10 +191,6 @@ def handle_client(client)
   begin
     raw = client.recv(4096)
     raw = "" if raw.nil?
-    # recv returns a :binstr; normalize to a concrete String up front so every
-    # value we slice out of it downstream (paths, header lines, the token)
-    # dispatches String methods reliably.
-    raw = raw.dup
 
     # Headers and body are separated by a blank line (CRLFCRLF).
     split_at = raw.index("\r\n\r\n")

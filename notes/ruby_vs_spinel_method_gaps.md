@@ -315,24 +315,6 @@ feature that could be added later with more effort — the limitation is
 structural: the C runtime itself prevents NUL from appearing in any string
 value or being written to standard output.
 
-#### What this means for nix_utils
-
-The `-z` option was implemented in `head.rb` and `tail.rb` during initial
-development and included in the test suite. The tests failed 100% of the time
-under Spinel because the NUL delimiter could never be written to stdout. Rather
-than leave permanently broken tests, the option was removed entirely:
-
-- `head.rb` — `-z` / `--zero-terminated` removed; `line_head` simplified to
-  always split on `"\n"`.
-- `tail.rb` — `-z` / `--zero-terminated` removed; `split_lines` /
-  `rejoin_lines` simplified to always use `"\n"`.
-
-The two corresponding test cases were dropped from `tests/nix_utils_test.sh`.
-All remaining tests pass under Spinel.
-
-Other tools in the suite (`grep -z`, `sort -z`, `cut -z`, etc.) do not
-advertise a `-z` flag in their man pages for this project for the same reason.
-
 ### Poly-string method dispatch (whole-program inference gap)
 
 When a string value is inferred as *polymorphic* (`sp_RbVal`) rather than a
@@ -643,10 +625,7 @@ spinel -E -e 'puts IO.read("/etc/hosts").length > 0'
 spinel -E -e 'puts open("/etc/hosts").class'                # File
 ```
 
-**FFI workaround for syscall-level File ops:** The `nix_utils/` directory
-contains `sp_file_ext.c` + `file_ext.rb` which provide `FileExt` with confirmed
-working FFI bindings for `readlink`, `symlink`, `link`, `chmod`, `stat_str`,
-`lstat_str`, and `utime_c`. See `notes/ffi_and_require_reference.md`.
+**FFI workaround for syscall-level File ops:** For syscalls not exposed by Spinel's Ruby surface (e.g. `readlink`, `symlink`, `link`, `chmod`, `stat` details), write a small C extension with `native_func` in a user-defined module. See `notes/ffi_and_require_reference.md` for the pattern and constraints.
 
 ### IO Methods Missing
 
@@ -796,7 +775,7 @@ Prefer these because they are supported and already fit Spinel's design:
 - CLI parsing: manual `ARGV` loop for any flag that takes a value; `require "optparse"` only for boolean flags
 - JSON: `require "json"`
 - Base64: `require "base64"`
-- Digests: `require "digest"` for SHA1/SHA256 hexdigest; use `require_relative "digest_ext"` (nix_utils) for MD5, SHA-224, SHA-384, SHA-512 — Spinel's built-in `digest` package only ships SHA-1 and SHA-256
+- Digests: `require "digest"` for SHA1/SHA256 hexdigest; Spinel's built-in `digest` package only ships SHA-1 and SHA-256 — MD5, SHA-224, SHA-384, SHA-512 are not available without a custom C extension
 - In-memory IO: `require "stringio"`
 - Tokenizing/parsing: `require "strscan"`
 - Sets: `require "set"`

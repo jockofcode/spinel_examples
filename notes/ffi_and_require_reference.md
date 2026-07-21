@@ -136,11 +136,11 @@ and keeps the example source close to CRuby.
 
 > **Important:** The `ffi_func` name used elsewhere in this document reflects
 > earlier planning notes. The DSL confirmed to actually work (tested end-to-end
-> in `nix_utils/`) is **`native_func`**. The sections below have not been fully
+> in `native/socket_ext/`) is **`native_func`**. The sections below have not been fully
 > updated; treat any `ffi_func` reference as `native_func` until the note is
 > revised.
 
-### Confirmed constraints (verified in `nix_utils/file_ext.rb` + `sp_file_ext.c`)
+### Confirmed constraints (verified in `native/socket_ext/socket_ext.c` + `source/lib/socket_shim.rb`)
 
 **1. Use user-defined modules, not built-in class reopenings.**
 
@@ -260,11 +260,10 @@ const char *sp_file_readlink(const char *path) {
 }
 ```
 
-**Reference implementation:** `nix_utils/sp_file_ext.c` (C) and
-`nix_utils/file_ext.rb` (Ruby bindings + CRuby fallbacks). The `FileExt`
-module provides `readlink`, `symlink`, `link`, `chmod`, `stat_str`,
-`lstat_str`, and `utime_c`. The test suite in `tests/nix_utils_test.sh`
-auto-compiles `sp_file_ext.o` and adds `--link` to every Spinel invocation.
+**Reference implementation:** `native/socket_ext/socket_ext.c` (C) and
+`source/lib/socket_shim.rb` (Ruby bindings + CRuby fallbacks). See that pair
+for a complete working example of the `native_func` pattern with a custom C
+extension and `--link`.
 
 ---
 

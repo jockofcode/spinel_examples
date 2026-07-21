@@ -693,8 +693,8 @@ tf_empty="$TMP/sha256_empty"
 printf '' >"$tf_empty"
 rn sha256sum "'$tf_empty'"
 grep -q "$empty_sha256" "$ACT" && r=true || r=false; cke "sha256sum empty file" true "$r"
-# -c verify passes
-rn sha256sum "'$tf_empty'" > "$TMP/sha256_check"
+# -c verify passes (must capture output to a file first via eval, not via rn)
+eval "$RUBY '$(tool sha256sum)' '$tf_empty'" >"$TMP/sha256_check" 2>/dev/null
 rn sha256sum "-c '$TMP/sha256_check'"
 grep -q 'OK' "$ACT" && r=true || r=false; cke "sha256sum -c verify OK" true "$r"
 # -c verify fails for wrong checksum
@@ -720,9 +720,9 @@ rn cksum "'$tf_ck'"
 [ -n "$(cat "$ACT")" ] && r=true || r=false; cke "cksum default CRC produces output" true "$r"
 # -a md5 should match md5sum
 rn cksum "-a md5 '$tf_ck'"
-rn md5sum "'$tf_ck'" > "$TMP/cksum_md5ref"
 cksum_hash=$(cat "$ACT" | awk '{print $1}')
-md5_hash=$(cat "$TMP/cksum_md5ref" | awk '{print $1}')
+rn md5sum "'$tf_ck'"
+md5_hash=$(cat "$ACT" | awk '{print $1}')
 cke "cksum -a md5 matches md5sum" "$md5_hash" "$cksum_hash"
 rm -f "$tf_ck"
 

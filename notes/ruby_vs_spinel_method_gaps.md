@@ -364,6 +364,117 @@ build `user` / `sig` by appending one `char` at a time. Prefer this pattern
 over `#split` / `#index` / range slices whenever a string is derived from
 parsed network or `recv` input and then handed across methods.
 
+### sp_RbVal propagation through multi-call-site functions
+
+A subtler form of the same problem: if a function is called from multiple call
+sites with different argument types — one site passes a typed `String`, another
+passes an `sp_RbVal` (e.g. `lines[n]`, an ARGV element, or a return from
+another polymorphic helper) — Spinel infers the **parameter** type as
+`sp_RbVal` for the whole function. This propagates to all nested calls:
+
+```
+make_sort_value(body, opts)        # body is sp_RbVal: inferred from lines[n] call site
+  → extract_key_text(body, opts)   # body is sp_RbVal
+    → split_fields(body, opts.sep) # line is sp_RbVal
+      → line.split(" ")            # runtime dispatch fails — split not in dispatch table
+```
+
+The runtime error is `undefined method 'split' for an instance of String
+(NoMethodError)` — confusing because `class` reports `String`, but the method
+was compiled as a direct typed call, not registered in the runtime dispatch table.
+
+**Fix: coerce at function entry.** Add `cbody = "" + body` at the start of
+every function that may receive sp_RbVal but needs to call String methods:
+
+```ruby
+def make_sort_value(body, opts)
+  cbody = "" + body  # coerce immediately; body may be sp_RbVal from lines[n]
+  ...
+end
+```
+
+Similarly for `split_fields`:
+```ruby
+def split_fields(line, sep)
+  typed_line = "" + line
+  sep.nil? ? typed_line.split(" ") : typed_line.split("" + sep)
+end
+```
+
+**Alternative:** remove the sp_RbVal call site by coercing there:
+```ruby
+a = make_sort_value("" + lines[n], opts)
+```
+Either approach works; function-entry coercion is more defensive.
+
+### `Array#reverse!` and other mutating Array methods
+
+`Array#reverse!` (in-place reverse) is not available in Spinel. Use the
+non-mutating form and reassign:
+
+```ruby
+# Fails at runtime or compile time:
+sorted.reverse! if opts.sort_reverse
+
+# Correct:
+sorted = sorted.reverse if opts.sort_reverse
+```
+
+Other mutating methods to watch for: `sort!`, `uniq!`, `flatten!`, `compact!`,
+`map!`. Prefer the non-mutating equivalents with reassignment.
+
+### Multi-return parse_argv and typed object degradation
+
+Returning `[opts, files]` from a `parse_argv` function and unpacking with
+multi-assign (`opts, files = parse_argv(ARGV)`) makes **both** variables
+sp_RbVal, even when the function creates typed objects internally. Even the
+explicit-indexing workaround (`r = parse_argv(ARGV); opts = r[0]`) yields
+sp_RbVal — **array element access always degrades to sp_RbVal**.
+
+**Canonical pattern:** pre-declare the typed object before the call and pass it
+by reference. Return only the remaining untyped values (or use globals for
+scalar extras):
+
+```ruby
+# Before (breaks in Spinel):
+opts, files = parse_argv(ARGV)   # opts is sp_RbVal — opts.field fails
+
+# After:
+opts = SortOptions.new           # typed at the point of declaration
+files = parse_argv(ARGV, opts)   # parse_argv modifies opts in place; returns only files
+
+# In parse_argv:
+def parse_argv(argv, opts)       # no local "opts = SortOptions.new"
+  files = []
+  # set opts.field = ... directly
+  files                          # return only files (StrArray, properly typed)
+end
+```
+
+For extra scalar return values (`files0_from`, `total_when`), use module-level
+globals:
+```ruby
+$wc_files0_from = nil
+$wc_total_when  = "auto"
+
+def parse_argv(argv, selection)
+  ...
+  $wc_files0_from = arg[14, ...]
+  $wc_total_when  = tw
+  files
+end
+
+selection = WcSelection.new
+files = parse_argv(ARGV, selection)
+files0_from = $wc_files0_from  # sp_RbVal but coercible: "" + files0_from
+total_when  = "" + $wc_total_when.to_s
+```
+
+**Corollary — avoid arrays of typed objects.** Indexing `opts.sort_keys[0]`
+yields sp_RbVal even if `sort_keys` is a typed SortKey array. Instead, inline
+the fields directly on the options object: `opts.sk_field`, `opts.sk_numeric`,
+`opts.sk_fold_case`, etc.
+
 ### AOT compile-time type coercion: `"" + s` not `s.dup`
 
 When a string crosses a function boundary (e.g. ARGV elements, array index
@@ -685,7 +796,7 @@ Prefer these because they are supported and already fit Spinel's design:
 - CLI parsing: manual `ARGV` loop for any flag that takes a value; `require "optparse"` only for boolean flags
 - JSON: `require "json"`
 - Base64: `require "base64"`
-- Digests: `require "digest"` for SHA1/SHA256 hexdigest
+- Digests: `require "digest"` for SHA1/SHA256 hexdigest; use `require_relative "digest_ext"` (nix_utils) for MD5, SHA-224, SHA-384, SHA-512 — Spinel's built-in `digest` package only ships SHA-1 and SHA-256
 - In-memory IO: `require "stringio"`
 - Tokenizing/parsing: `require "strscan"`
 - Sets: `require "set"`

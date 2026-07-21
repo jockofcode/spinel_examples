@@ -75,10 +75,20 @@ template = "tmp.XXXXXXXXXX" if template.nil?
 template = ("" + template) + ("" + suffix)
 
 # Find the last run of Xs in the last path component.
-last_slash = template.rindex("/")
-if last_slash.nil?
+# Find last slash manually (String#rindex not available in Spinel)
+last_slash = -1
+lsi = template.length - 1
+while lsi >= 0
+  if template[lsi] == "/"
+    last_slash = lsi
+    break
+  end
+  lsi -= 1
+end
+basename = ""
+dirname  = ""
+if last_slash < 0
   basename = template
-  dirname  = nil
 else
   basename = template[last_slash + 1, template.length - last_slash - 1]
   dirname  = template[0, last_slash]
@@ -101,28 +111,28 @@ prefix = basename[0, x_start]
 suffix_part = ""  # no suffix after Xs in this implementation
 
 # Determine base directory
-base =
-  if !dirname.nil?
-    dirname
-  elsif !tmpdir.nil?
-    "" + tmpdir
-  else
-    td = ENV["TMPDIR"]
-    (td.nil? || ("" + td) == "") ? "/tmp" : ("" + td)
-  end
+base = "/tmp"
+if dirname != ""
+  base = dirname
+elsif !tmpdir.nil?
+  base = "" + tmpdir
+else
+  td = ENV["TMPDIR"]
+  base = (td.nil? || ("" + td) == "") ? "/tmp" : ("" + td)
+end
 
 CHARS = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 attempts = 0
-path = nil
+path = ""
 loop do
   rand_part = ""
   x_count.times do
     rand_part += CHARS[rand(CHARS.length)]
   end
-  candidate = base + "/" + prefix + rand_part + suffix_part
-  unless File.exist?(candidate)
-    path = candidate
+  candidate = ("" + base) + "/" + ("" + prefix) + rand_part + ("" + suffix_part)
+  unless File.exist?("" + candidate)
+    path = "" + candidate
     break
   end
   attempts += 1
@@ -137,18 +147,19 @@ if dry_run
   exit 0
 end
 
+cpath = "" + path
 begin
   if make_dir
-    Dir.mkdir(path)
+    Dir.mkdir(cpath)
   else
     # Create the file exclusively; fall back to a plain open if flags unsupported.
     begin
-      File.open(path, File::CREAT | File::EXCL | File::WRONLY) { }
+      File.open(cpath, File::CREAT | File::EXCL | File::WRONLY) { }
     rescue
-      File.open(path, "w") { }
+      File.open(cpath, "w") { }
     end
   end
-  puts path
+  puts cpath
 rescue
   STDERR.puts "mktemp: failed to create #{make_dir ? 'directory' : 'file'} via template '#{template}'" unless quiet
   exit 1

@@ -58,8 +58,8 @@ With `asdf`:
 
 ```bash
 asdf plugin add spinel https://github.com/jockofcode/asdf-spinel
-asdf install spinel latest
-asdf set -u spinel latest   # make it the default (~/.tool-versions)
+asdf install spinel master
+asdf set -u spinel master   # make it the default (~/.tool-versions)
 ```
 
 Or build it from source:

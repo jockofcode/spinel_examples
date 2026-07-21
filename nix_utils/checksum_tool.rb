@@ -159,7 +159,7 @@ def run_check_mode(check_files, opts)
         next
       end
       actual_data   = File.read(filename)
-      actual_hash   = DIGEST_CALL.call(actual_data)
+      actual_hash   = compute_digest("" + actual_data)
       if ("" + actual_hash) == expected_hash
         total_ok += 1
         unless opts.status_only || opts.quiet_verify
@@ -192,7 +192,7 @@ def run_hash_mode(hash_files, opts)
     cf = "" + f
     if cf == "-"
       data = STDIN.read
-      hash = DIGEST_CALL.call(data)
+      hash = compute_digest("" + data)
       puts format_checksum_line(hash, "-", opts)
     elsif !File.exist?(cf)
       STDERR.puts "#{TOOL_NAME}: #{cf}: No such file or directory"
@@ -202,7 +202,7 @@ def run_hash_mode(hash_files, opts)
       exit_code = 1
     else
       data = File.read(cf)
-      hash = DIGEST_CALL.call(data)
+      hash = compute_digest("" + data)
       puts format_checksum_line(hash, cf, opts)
     end
   end

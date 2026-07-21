@@ -44,7 +44,7 @@ class DuOptions
     @threshold       = nil    # Integer bytes; negative means "smaller than"
     @show_time       = false
     @time_style      = nil
-    @exclude_pats    = []
+    @exclude_pats    = [""]
     @inodes          = false
     @count_links     = false
   end

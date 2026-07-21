@@ -127,7 +127,7 @@ end
 # Count decimal places in a number string like "1.50" -> 2, "3" -> 0.
 def decimal_places(s)
   dot = s.index(".")
-  return 0 if dot < 0
+  return 0 if dot.nil?
   # Strip trailing zeros from the original string for a clean count.
   frac = s[dot + 1, s.length - dot - 1]
   i = frac.length - 1

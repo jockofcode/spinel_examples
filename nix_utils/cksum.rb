@@ -28,6 +28,7 @@ USAGE = "Usage: cksum [OPTION]... [FILE]...\n" \
 VERSION = "cksum (nix_utils) 1.0"
 
 require "digest"
+require_relative "digest_ext"
 require "base64"
 require_relative "nix_helpers"
 
@@ -112,21 +113,21 @@ end
 def compute_digest(algo, data)
   a = "" + algo
   if a == "crc"
-    return ["", posix_crc(data), nil]   # [encoded, raw_int, label]
+    return ["", posix_crc(data), ""]   # [hex_str, raw_int, label]
   elsif a == "crc32b"
-    return ["", crc32b(data), nil]
+    return ["", crc32b(data), ""]
   elsif a == "bsd"
-    return ["", bsd_checksum(data), nil]
+    return ["", bsd_checksum(data), ""]
   elsif a == "sysv"
-    return ["", sysv_checksum(data), nil]
+    return ["", sysv_checksum(data), ""]
   elsif a == "md5"
-    return [Digest::MD5.hexdigest(data), nil, "MD5"]
+    return [Digest::MD5.hexdigest("" + data), 0, "MD5"]
   elsif a == "sha1"
-    return [Digest::SHA1.hexdigest(data), nil, "SHA1"]
+    return [Digest::SHA1.hexdigest("" + data), 0, "SHA1"]
   elsif a == "sha2"
-    return [Digest::SHA256.hexdigest(data), nil, "SHA256"]
+    return [Digest::SHA256.hexdigest("" + data), 0, "SHA256"]
   else
-    die("cksum: #{algo}: unsupported algorithm")
+    STDERR.puts "cksum: #{algo}: unsupported algorithm"; exit 1
   end
 end
 

@@ -101,15 +101,15 @@ def print_row(counts, selection, label)
   puts line
 end
 
-# Parse ARGV into [selection, files, files0_from, total_when].
-# "-" is a file; "--" ends options.
-def parse_argv(argv)
-  selection   = WcSelection.new
-  files       = []
-  files0_from = nil
-  total_when  = "auto"
+$wc_files0_from = nil
+$wc_total_when  = "auto"
+
+# Parse ARGV; modifies selection in place. Sets $wc_files0_from / $wc_total_when.
+# Returns files array.
+def parse_argv(argv, selection)
+  files        = []
   options_done = false
-  index = 0
+  index        = 0
   while index < argv.length
     arg = argv[index]
     if options_done || arg == "-" || arg.length < 2 || arg[0] != "-"
@@ -130,17 +130,17 @@ def parse_argv(argv)
     elsif arg == "--max-line-length"
       selection.max_length = true
     elsif arg.length > 14 && arg[0, 14] == "--files0-from="
-      files0_from = arg[14, arg.length - 14]
+      $wc_files0_from = arg[14, arg.length - 14]
     elsif arg == "--files0-from"
       index += 1
-      files0_from = argv[index]
+      $wc_files0_from = argv[index]
     elsif arg.length > 8 && arg[0, 8] == "--total="
-      total_when = arg[8, arg.length - 8]
-      unless total_when == "auto" || total_when == "always" ||
-             total_when == "only" || total_when == "never"
-        STDERR.puts "wc: invalid argument '#{total_when}' for '--total'"
+      tw = arg[8, arg.length - 8]
+      unless tw == "auto" || tw == "always" || tw == "only" || tw == "never"
+        STDERR.puts "wc: invalid argument '#{tw}' for '--total'"
         exit 1
       end
+      $wc_total_when = tw
     elsif arg == "--debug"
       # internal flag, silently ignored
     else
@@ -168,10 +168,13 @@ def parse_argv(argv)
     end
     index += 1
   end
-  [selection, files, files0_from, total_when]
+  files
 end
 
-selection, files, files0_from, total_when = parse_argv(ARGV)
+selection = WcSelection.new
+files     = parse_argv(ARGV, selection)
+files0_from = $wc_files0_from
+total_when  = "" + $wc_total_when.to_s
 
 # --files0-from=F: append NUL-separated filenames from F to the file list.
 # NUL bytes can't be embedded in C strings, so we convert them to newlines

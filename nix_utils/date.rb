@@ -160,7 +160,7 @@ def parse_date_string(s)
       end
     return Time.at(now.to_i + sign * secs)
   end
-  die("date: invalid date '#{s}'")
+  STDERR.puts "date: invalid date '#{s}'"; exit 1
 end
 
 # ── Output formatting ───────────────────────────────────────────────────────

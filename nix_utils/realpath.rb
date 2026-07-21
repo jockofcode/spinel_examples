@@ -101,8 +101,15 @@ files.each do |f|
   cf = "" + f
   if no_symlinks
     resolved = File.expand_path(cf)
-  else
+  elsif allow_missing
+    # Can't resolve symlinks if path may not exist; just normalize
     resolved = File.expand_path(cf)
+  else
+    begin
+      resolved = File.realpath(cf)
+    rescue
+      resolved = File.expand_path(cf)
+    end
   end
 
   if must_exist && !File.exist?(resolved)

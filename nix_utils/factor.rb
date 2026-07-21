@@ -42,7 +42,13 @@ while index < ARGV.length
 end
 
 if numbers.empty?
-  STDIN.read.split("\n").each { |line| numbers.push("" + line) unless ("" + line) == "" }
+  stdin_lines = STDIN.read.to_s.split("\n")
+  li = 0
+  while li < stdin_lines.length
+    line = "" + stdin_lines[li]
+    numbers.push(line) unless line == ""
+    li += 1
+  end
 end
 
 def factorize(n)

@@ -38,6 +38,18 @@ in_place     = false
 in_place_sfx = nil
 options_done = false
 
+# Capture mode: nil = write to stdout, array = collect lines for in-place write.
+# $stdout redirection is not supported in Spinel; this global is used instead.
+$sed_cap = nil
+
+def sed_puts(s)
+  if $sed_cap.nil?
+    puts "" + s
+  else
+    $sed_cap.push("" + s)
+  end
+end
+
 index = 0
 while index < ARGV.length
   arg = coerce(ARGV[index])
@@ -103,12 +115,11 @@ script_text = scripts.join("\n")
 # ── SedCommand ────────────────────────────────────────────────────────────────
 
 class SedAddr
-  attr_accessor :kind, :val, :re_str, :re_obj, :step, :step_from
+  attr_accessor :kind, :val, :re_str, :step, :step_from
   def initialize(kind, val = nil)
     @kind      = kind   # :line, :last, :regex, :step
     @val       = val
     @re_str    = nil
-    @re_obj    = nil
     @step      = nil
     @step_from = nil
   end
@@ -197,7 +208,6 @@ class SedParser
       re_str = read_until_delim(delim)
       addr = SedAddr.new(:regex)
       addr.re_str = re_str
-      addr.re_obj = Regexp.new(re_str, @ere ? 0 : 0)
       return addr
     elsif "0123456789".include?(c)
       n_str = ""
@@ -333,11 +343,7 @@ class SedParser
       end
       sc.arg1 = pattern
       sc.arg2 = replace
-      sc.arg3 = nil
       sc.arg_flags = flags
-      re_flags = @ere ? 0 : 0
-      re_flags = Regexp::IGNORECASE if flags.include?("i") || flags.include?("I")
-      sc.arg3 = Regexp.new(pattern, re_flags)
     when "y"
       delim   = advance
       src_str = read_until_delim(delim)
@@ -416,7 +422,7 @@ class SedState
     @line_num       = 0
     @sub_since_last = false
     @last_line      = false
-    @output_buf     = []
+    @output_buf     = [""]
   end
 end
 
@@ -428,7 +434,8 @@ def addr_matches?(addr, state)
   elsif k == "last"
     return state.last_line
   elsif k == "regex"
-    return !addr.re_obj.nil? && !("" + state.pattern).match(addr.re_obj).nil?
+    re_s = "" + addr.re_str.to_s
+    return re_s != "" && !Regexp.new(re_s).match("" + state.pattern).nil?
   elsif k == "step"
     from = addr.step_from.to_i
     step = addr.step.to_i
@@ -467,6 +474,45 @@ def in_range?(cmd, state, active_ranges)
     end
     return false
   end
+end
+
+# Build replacement string for sed s command.
+# Takes a MatchData object directly (def functions can receive MatchData; lambdas cannot).
+def apply_repl_with_match(repl_str, m)
+  r   = "" + repl_str
+  out = ""
+  ri  = 0
+  while ri < r.length
+    rc = r[ri]
+    if rc == "\\" && ri + 1 < r.length
+      nc = r[ri + 1]
+      if "123456789".include?(nc)
+        cap_idx = nc.to_i
+        cap = m[cap_idx]
+        out += cap.nil? ? "" : ("" + cap.to_s)
+        ri += 2
+        next
+      elsif nc == "&"
+        out += "" + m[0].to_s
+        ri += 2
+        next
+      elsif nc == "\\"
+        out += "\\"
+        ri += 2
+        next
+      else
+        out += nc
+        ri += 2
+        next
+      end
+    elsif rc == "&"
+      out += "" + m[0].to_s
+    else
+      out += rc
+    end
+    ri += 1
+  end
+  out
 end
 
 def exec_cmd(cmd, state, cmds_list, label_idx, quiet, sandbox, active_ranges)
@@ -533,9 +579,11 @@ def exec_cmd(cmd, state, cmds_list, label_idx, quiet, sandbox, active_ranges)
     end
     state.pattern = result
   when "s"
-    re     = cmd.arg3
-    repl   = "" + cmd.arg2.to_s
+    pat    = "" + cmd.arg1.to_s
     flags  = "" + cmd.arg_flags.to_s
+    re_f   = (flags.include?("i") || flags.include?("I")) ? Regexp::IGNORECASE : 0
+    re     = Regexp.new(pat, re_f)
+    repl   = "" + cmd.arg2.to_s
     ps     = "" + state.pattern
     global = flags.include?("g")
     nth    = nil
@@ -554,63 +602,51 @@ def exec_cmd(cmd, state, cmds_list, label_idx, quiet, sandbox, active_ranges)
       end
       fi += 1
     end
-    # Build replacement string handling \1 \2 etc.
-    build_repl = lambda do |m|
-      r   = "" + repl
-      out = ""
-      ri  = 0
-      while ri < r.length
-        rc = r[ri]
-        if rc == "\\" && ri + 1 < r.length
-          nc = r[ri + 1]
-          if "123456789".include?(nc)
-            cap_idx = nc.to_i
-            cap = m[cap_idx] rescue nil
-            out += (cap || "")
-            ri += 2
-            next
-          elsif nc == "&"
-            out += (m[0] || "")
-            ri += 2
-            next
-          elsif nc == "\\"
-            out += "\\"
-            ri += 2
-            next
-          else
-            out += nc
-            ri += 2
-            next
-          end
-        elsif rc == "&"
-          out += (m[0] || "")
-        else
-          out += rc
-        end
-        ri += 1
-      end
-      out
-    end
-    new_str = nil
+    new_str = "" + ps
     if global
-      new_str = ps.gsub(re) { |m_str| build_repl.call($~) }
-      state.sub_since_last = (new_str != ps)
-    elsif !nth.nil?
-      count  = 0
+      # Manual global replace using re.match() loop (String#gsub(re){} not available in Spinel)
       result = ""
-      last   = 0
-      ps.scan(re) do
+      remaining = "" + ps
+      sub_happened = false
+      while true
+        m = re.match(remaining)
+        break if m.nil?
+        result += remaining[0, m.begin(0)]
+        result += apply_repl_with_match(repl, m)
+        sub_happened = true
+        adv = m.end(0)
+        if adv <= m.begin(0)
+          result += remaining.length > adv ? remaining[adv, 1] : ""
+          adv += 1
+        end
+        remaining = adv < remaining.length ? remaining[adv, remaining.length - adv] : ""
+      end
+      result += remaining
+      new_str = result
+      state.sub_since_last = sub_happened
+    elsif !nth.nil?
+      # Find and replace the nth occurrence using re.match() loop
+      count     = 0
+      pos       = 0
+      found_nth = false
+      result    = ""
+      while pos <= ps.length
+        sub_str = pos < ps.length ? ps[pos, ps.length - pos] : ""
+        break if ("" + sub_str.to_s) == ""
+        m = re.match(sub_str)
+        break if m.nil?
         count += 1
-        m = $~
+        abs_begin = pos + m.begin(0)
+        abs_end   = pos + m.end(0)
         if count == nth
-          result += ps[last, m.begin(0) - last]
-          result += build_repl.call(m)
-          last = m.end(0)
+          result = ps[0, abs_begin] + apply_repl_with_match(repl, m) + ps[abs_end, ps.length - abs_end]
+          found_nth = true
           break
         end
+        pos = abs_end
+        pos += 1 if m.begin(0) == m.end(0)
       end
-      if count >= nth
-        result += ps[last, ps.length - last]
+      if found_nth
         new_str = result
         state.sub_since_last = true
       else
@@ -618,12 +654,13 @@ def exec_cmd(cmd, state, cmds_list, label_idx, quiet, sandbox, active_ranges)
         state.sub_since_last = false
       end
     else
-      m = ps.match(re)
+      # Single substitution using re.match() (String#match(re) not available in Spinel)
+      m = re.match(ps)
       if m.nil?
         new_str = ps
         state.sub_since_last = false
       else
-        new_str = ps[0, m.begin(0)] + build_repl.call(m) + ps[m.end(0), ps.length - m.end(0)]
+        new_str = ps[0, m.begin(0)] + apply_repl_with_match(repl, m) + ps[m.end(0), ps.length - m.end(0)]
         state.sub_since_last = true
       end
     end
@@ -724,12 +761,6 @@ def exec_cmd(cmd, state, cmds_list, label_idx, quiet, sandbox, active_ranges)
   [:next_cmd, 0]
 end
 
-def flush_output(state, buf, quiet, print_pattern)
-  (state.output_buf + buf).each { |line| puts "" + line.to_s }
-  state.output_buf = []
-  puts "" + state.pattern if print_pattern && !quiet
-end
-
 def process_stream(lines_arr, cmds, label_idx, quiet, sandbox)
   state         = SedState.new
   active_ranges = {}
@@ -761,9 +792,9 @@ def process_stream(lines_arr, cmds, label_idx, quiet, sandbox)
       elsif rs == "quit_no_print"
         quit_code = val.to_i; quit_print = false; break
       elsif rs == "next_line"
-        puts("" + state.pattern) unless quiet
-        state.output_buf.each { |l| puts "" + l.to_s }
-        state.output_buf = []
+        sed_puts("" + state.pattern) unless quiet
+        obi = 1; while obi < state.output_buf.length; sed_puts "" + state.output_buf[obi]; obi += 1; end
+        state.output_buf = [""]
         li += 1
         break if li >= total
         state.line_num += 1
@@ -794,16 +825,16 @@ def process_stream(lines_arr, cmds, label_idx, quiet, sandbox)
     end
 
     unless do_delete
-      state.output_buf.each { |l| puts "" + l.to_s }
-      state.output_buf = []
-      puts("" + state.pattern) unless quiet
+      obi = 1; while obi < state.output_buf.length; sed_puts "" + state.output_buf[obi]; obi += 1; end
+      state.output_buf = [""]
+      sed_puts("" + state.pattern) unless quiet
     else
-      state.output_buf = []
+      state.output_buf = [""]
     end
-    after_texts.each { |t| puts "" + t.to_s }
+    after_texts.each { |t| sed_puts "" + t.to_s }
 
     unless quit_code.nil?
-      puts("" + state.pattern) if quit_print && !quiet && !do_delete
+      sed_puts("" + state.pattern) if quit_print && !quiet && !do_delete
       exit quit_code.to_i
     end
 
@@ -820,18 +851,20 @@ if in_place
     content  = File.read(cf)
     lines    = content.split("\n", -1)
     lines.pop if !lines.empty? && ("" + lines.last) == ""
-    # Redirect output to a buffer
-    old_stdout = $stdout
-    require "stringio"
-    buf = StringIO.new
-    $stdout = buf
-    process_stream(lines, cmds, label_idx, quiet, sandbox)
-    $stdout = old_stdout
-    new_content = buf.string
     unless in_place_sfx.nil?
-      File.write(cf + ("" + in_place_sfx), content)
+      File.open(cf + ("" + in_place_sfx), "w") { |bakf| bakf.write(content) }
     end
-    File.write(cf, new_content)
+    $sed_cap = [""]
+    process_stream(lines, cmds, label_idx, quiet, sandbox)
+    cap = $sed_cap
+    $sed_cap = nil
+    out_str = ""
+    ci2 = 1
+    while ci2 < cap.length
+      out_str += cap[ci2] + "\n"
+      ci2 += 1
+    end
+    File.open(cf, "w") { |outf| outf.write(out_str) }
   end
 else
   if separate

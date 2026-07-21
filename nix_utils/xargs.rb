@@ -44,7 +44,7 @@ require_relative "nix_helpers"
 class XargsOptions
   attr_accessor :arg_file, :delimiter, :replace_str, :max_lines
   attr_accessor :max_args, :no_run_empty, :verbose, :interactive
-  attr_accessor :eof_str, :max_chars, :exit_on_size, :command_args
+  attr_accessor :eof_str, :max_chars, :exit_on_size, :command_args, :command_given
   def initialize
     @arg_file      = nil
     @delimiter     = nil    # nil = whitespace
@@ -57,7 +57,8 @@ class XargsOptions
     @eof_str       = nil
     @max_chars     = nil
     @exit_on_size  = false
-    @command_args  = []
+    @command_args  = [""]   # type hint; index 0 is a sentinel, real args start at 1
+    @command_given = false
   end
 end
 
@@ -70,6 +71,7 @@ while index < ARGV.length
   arg = coerce(ARGV[index])
   if options_done || reading_cmd
     opts.command_args.push(arg)
+    opts.command_given = true
   elsif arg == "--"
     options_done = true
   elsif arg == "--help"
@@ -139,6 +141,7 @@ while index < ARGV.length
     opts.exit_on_size = true
   elsif arg[0] != "-"
     opts.command_args.push(arg)
+    opts.command_given = true
     reading_cmd = true
   else
     die("xargs: invalid option -- '#{arg}'\nTry 'xargs --help' for more information.")
@@ -231,8 +234,18 @@ if tokens.empty? && opts.no_run_empty
   exit 0
 end
 
-cmd_base = opts.command_args.empty? ? ["echo"] : opts.command_args
-cmd_base_str = cmd_base.map { |a| "" + a }.join(" ")
+cmd_base_str =
+  if !opts.command_given
+    "echo"
+  else
+    parts = []
+    i = 1  # index 0 is the sentinel
+    while i < opts.command_args.length
+      parts.push("" + opts.command_args[i])
+      i += 1
+    end
+    parts.join(" ")
+  end
 
 exit_code = 0
 

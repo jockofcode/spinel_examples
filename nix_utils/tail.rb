@@ -96,8 +96,7 @@ def set_count(value, label, opts)
   opts.count = parse_multiplier(text)
 end
 
-def parse_argv(argv)
-  opts  = TailOptions.new
+def parse_argv(argv, opts)
   files = []
   options_done = false
   index = 0
@@ -151,7 +150,7 @@ def parse_argv(argv)
     end
     index += 1
   end
-  [opts, files]
+  files
 end
 
 def read_source(name)
@@ -203,7 +202,8 @@ def pid_alive?(pid)
   File.exist?("/proc/#{pid}")
 end
 
-opts, files = parse_argv(ARGV)
+opts = TailOptions.new
+files = parse_argv(ARGV, opts)
 files = ["-"] if files.empty?
 
 print_headers = (files.length > 1 || opts.verbose) && !opts.quiet
@@ -252,7 +252,11 @@ if opts.follow && !files.empty?
     end
 
   # For --follow=name / -F, track the inode so we detect rotation.
-  last_inode = (!is_stdin && File.exist?(follow_name)) ? File.stat(follow_name).ino : nil
+  # File.stat.ino not available in Spinel; use shell stat -f %i instead.
+  last_inode = 0
+  if !is_stdin && File.exist?(follow_name)
+    last_inode = `stat -f '%i' '#{follow_name}'`.to_i
+  end
 
   while pid_alive?(opts.pid)
     sleep(opts.sleep_interval)
@@ -264,7 +268,7 @@ if opts.follow && !files.empty?
 
     # Handle file rotation (-F / --follow=name).
     if opts.follow_name && File.exist?(follow_name)
-      current_inode = File.stat(follow_name).ino
+      current_inode = `stat -f '%i' '#{follow_name}'`.to_i
       if current_inode != last_inode
         # File was replaced. Announce the new file and reset.
         STDERR.puts "tail: '#{follow_name}' has been replaced; following new file"

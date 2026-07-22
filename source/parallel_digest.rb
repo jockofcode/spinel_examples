@@ -27,44 +27,6 @@
 
 require "digest"
 
-# Return the first n characters of a string, built with a single-index [] loop
-# rather than a range slice (s[0...n]). When a string reaches us as a
-# poly-typed value (as digests/paths sliced back out of shared state do),
-# Spinel's range slicing returns only one character, whereas single-index []
-# and concatenation dispatch reliably.
-def first_chars(str, n)
-  out = ""
-  char_index = 0
-  while char_index < n && char_index < str.length
-    out = out + str[char_index]
-    char_index += 1
-  end
-  out
-end
-
-# Split "path\tdigest" back into [path, digest] using a single-index [] loop
-# (same poly-string reason as first_chars: #split / #index / range slices are
-# unreliable on these values, but [] and concatenation are not).
-def split_tab(line)
-  length = line.length
-  left = ""
-  right = ""
-  seen_tab = false
-  char_index = 0
-  while char_index < length
-    char = line[char_index]
-    if !seen_tab && char == "\t"
-      seen_tab = true
-    elsif seen_tab
-      right = right + char
-    else
-      left = left + char
-    end
-    char_index += 1
-  end
-  [left, right]
-end
-
 # Directories we never descend into: build output, VCS metadata, and scratch.
 # Skipping them keeps the output stable and the run fast.
 SKIP_DIRS = { "bin" => true, ".git" => true, "tmp" => true }
@@ -209,10 +171,10 @@ threads.each { |thread| thread.join }
 # scheduling order. We split each entry back apart for display and print the
 # first 12 hex chars of the digest.
 results.sort.each do |line|
-  parts = split_tab(line)
+  parts = line.split("\t")
   path = parts[0]
   digest = parts[1]
-  puts "#{first_chars(digest, 12)}  #{path}"
+  puts "#{digest[0...12]}  #{path}"
 end
 
 puts "hashed #{results.length} files with #{workers} workers"

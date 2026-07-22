@@ -131,7 +131,7 @@ while arg_index < ARGV.length
   if arg == "-f" || arg == "--file"
     file_value = ARGV[arg_index + 1]
     if file_value
-      data_file = "#{file_value}"
+      data_file = file_value
       arg_index += 1
     end
   elsif arg == "-h" || arg == "--help"

@@ -70,34 +70,13 @@ def make_token(user)
 end
 
 # Return the verified user name for a token, or nil if it is malformed or the
-# signature does not match. We split on "." into exactly two parts; splitting
-# (rather than String#index arithmetic) keeps the element types simple for the
-# compiler when the token arrives as a freshly built runtime string.
+# signature does not match. Token format is "user.signature".
 def verify_token(token)
   return nil if token.nil?
-  # The token arrives as a poly-typed string sliced out of an HTTP header. In
-  # this whole-program inference context Spinel dispatches only single-index
-  # String#[] and #length on that value (not #index, #split, or range slices),
-  # so we walk it one character at a time: everything before the first "." is
-  # the user, everything after is the signature. Building the two parts by
-  # char-concatenation keeps us on the operations that dispatch reliably.
-  length = token.length
-  user = ""
-  sig = ""
-  seen_dot = false
-  char_index = 0
-  while char_index < length
-    char = token[char_index]
-    if !seen_dot && char == "."
-      seen_dot = true
-    elsif seen_dot
-      sig = sig + char
-    else
-      user = user + char
-    end
-    char_index += 1
-  end
-  return nil unless seen_dot
+  parts = token.split(".")
+  return nil if parts.length < 2
+  user = parts[0]
+  sig = parts[1]
   return nil if user == "" || sig == ""
   expected = Crypto.hmac_b64url(SECRET, user)
   sig == expected ? user : nil
@@ -234,7 +213,7 @@ while arg_index < ARGV.length
   if ARGV[arg_index] == "-p"
     port_value = ARGV[arg_index + 1]
     if port_value
-      port = "#{port_value}".to_i
+      port = port_value.to_i
       arg_index += 1
     end
   end

@@ -6,7 +6,7 @@
 #
 # Compile: spinel source/fyel_srvr_2.rb -o bin/fyel_srvr_2
 # Run:     ./bin/fyel_srvr_2   (listens on 8080; open http://localhost:8080/)
-require_relative "lib/socket_shim"
+require_relative "lib/socket_tcp"
 
 # Write a single hard-coded HTML response and close the connection. The ensure
 # guarantees the socket is closed even if the write raises.

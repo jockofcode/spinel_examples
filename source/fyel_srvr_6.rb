@@ -9,7 +9,7 @@
 # Run:     ./bin/fyel_srvr -p 8080 [--no-index]
 #          Then open http://localhost:8080/ . Serve from the repo root so the
 #          server's "." maps to files you expect (e.g. public/, index.html).
-require_relative "lib/socket_shim"
+require_relative "lib/socket_tcp"
 
 # Flag parsing is a hand-rolled ARGV loop rather than optparse: it keeps this
 # example dependency-free and mirrors the earlier servers in the progression.

@@ -33,8 +33,9 @@ RUN_FULL="${TEST_ALL:-0}"
 mkdir -p bin
 
 # --- build ----------------------------------------------------------------
-# All five apps use require-gated packages, so they all compile with
-# SPINEL_REQUIRE_GATE=1.
+# fyel_srvr and token_api use socket_tcp.rb which speaks sp_net_* directly —
+# no SPINEL_REQUIRE_GATE needed. The other apps still require REQUIRE_GATE for
+# their CRuby-only stdlib requires (optparse, csv, openssl, etc.).
 
 echo "== building fyel_srvr =="
 spinel source/fyel_srvr_6.rb -o bin/fyel_srvr
@@ -46,7 +47,7 @@ echo "== building log_report =="
 SPINEL_REQUIRE_GATE=1 spinel source/log_report.rb -o bin/log_report
 
 echo "== building token_api =="
-SPINEL_REQUIRE_GATE=1 spinel source/token_api.rb -o bin/token_api
+spinel source/token_api.rb -o bin/token_api
 
 echo "== building parallel_digest =="
 SPINEL_REQUIRE_GATE=1 spinel source/parallel_digest.rb -o bin/parallel_digest

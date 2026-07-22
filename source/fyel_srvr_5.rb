@@ -1,5 +1,5 @@
 # fyel_srvr_5.rb
-require_relative "lib/socket_shim"
+require_relative "lib/socket_tcp"
 
 port = 8080
 arg_index = 0

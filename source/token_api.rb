@@ -1,18 +1,18 @@
 # token_api.rb, a tiny JSON REST API with HMAC-signed bearer tokens.
 #
 # Real backend patterns with no framework, compiled to one binary: a hand-rolled
-# accept loop over lib/socket_shim.rb, JSON request/response bodies, and
+# accept loop over lib/socket_tcp.rb, JSON request/response bodies, and
 # authentication tokens signed with HMAC-SHA256. The signing goes through
 # Spinel's sp_crypto runtime via a small FFI module; under CRuby the same file
 # falls back to OpenSSL so it runs unmodified with `ruby`.
 #
-# Compile: SPINEL_REQUIRE_GATE=1 spinel source/token_api.rb -o bin/token_api
+# Compile: spinel source/token_api.rb -o bin/token_api
 # Run:
 #   ./bin/token_api -p 8124
 #   TOKEN=$(curl -s -XPOST localhost:8124/login -d '{"user":"matz"}' | ...)
 #   curl -H "Authorization: Bearer $TOKEN" localhost:8124/notes
 #
-require_relative "lib/socket_shim"
+require_relative "lib/socket_tcp"
 require "json"
 
 # SECRET signs every token. In production this would be injected from the

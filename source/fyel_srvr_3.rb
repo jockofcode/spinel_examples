@@ -7,7 +7,7 @@
 #
 # Compile: spinel source/fyel_srvr_3.rb -o bin/fyel_srvr_3
 # Run:     ./bin/fyel_srvr_3   (listens on 8080; try / , /about , /api/status)
-require_relative "lib/socket_shim"
+require_relative "lib/socket_tcp"
 
 # Read one request, route on its path, and write the response. The socket is
 # closed via ensure whether or not routing succeeds.

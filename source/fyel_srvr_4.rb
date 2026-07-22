@@ -1,5 +1,5 @@
 # fyel_srvr_4.rb
-require_relative "lib/socket_shim"
+require_relative "lib/socket_tcp"
 
 # 1. Parse command-line flags.
 port = 8080

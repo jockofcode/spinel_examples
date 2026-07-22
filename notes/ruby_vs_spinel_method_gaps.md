@@ -58,7 +58,7 @@ Use this as the quick decision map for writing examples:
 | `optparse` | Currently broken — `parse!` fails at C compile time even with boolean-only flags; use a manual `ARGV` loop |
 | `send`, `public_send`, `respond_to?`, `method(:name)`, `&:sym`, `obj.method(:name).call` | Work when method name is a compile-time literal |
 | Lazy enumerators | Work: `(1..Float::INFINITY).lazy.select {...}.first(n)` confirmed |
-| Socket/network helpers | `require "socket"` provides `TCPServer`/`TCPSocket` natively; `TCPServer.open` block form does NOT work; `readpartial(n)` blocks until peer closes (FIN) — not suitable for HTTP servers; `lib/socket_shim.rb` still needed for HTTP servers (uses `sp_net_recv_some`) and for raw `Socket`, `UDPSocket`, `UNIXSocket` |
+| Socket/network helpers | `require "socket"` natively provides `TCPServer.new` + `accept` + `write`/`gets`/`fileno`/`close`; `TCPServer.open` block form and `recv` are NOT available natively. For HTTP servers use `lib/socket_tcp.rb` (adds `TCPServer.open` + `recv` via `sp_net_*`). For raw `Socket`/UDP/Unix use `lib/socket_shim.rb` |
 | Reflection and metaprogramming | Mostly unavailable or only works with compile-time literals |
 | Full Ruby stdlib (`date`, `net/*`, `securerandom`, `yaml`, `csv`, `fileutils`, `pp`, `uri`, `cgi`, `socket`) | Not available unless Spinel provides a package |
 | Encoding/transcoding/unicode normalization | Unavailable; Spinel assumes UTF-8 / ASCII-8BIT boundaries |
@@ -170,7 +170,18 @@ spinel -E -e 'puts $:.class'
 
 Use `SPINEL_REQUIRE_GATE=1` when running programs that contain `require`:
 
-- `socket` — provides `TCPServer`/`TCPSocket` natively; `TCPServer.new` works but `TCPServer.open` block form does NOT; `readpartial(n)` blocks until peer sends FIN (not suitable for HTTP servers); `recv` is not available on native sockets; raw `Socket`, `UDPSocket`, `UNIXSocket` are NOT included — use `lib/socket_shim.rb` for HTTP servers and for the missing socket classes
+- `socket` — natively provides:
+  - `TCPSocket.new(host, port)` — outbound client connections ✓
+  - `TCPServer.new(port)` or `TCPServer.new(host, port)` — binds and listens ✓
+  - `server.accept` → returns a `TCPSocket` ✓
+  - `socket.write(str)`, `socket.gets`, `socket.fileno`, `socket.close` ✓
+  - `TCPServer.open` block form — NOT available (runtime `NameError`)
+  - `socket.recv(n)` — NOT available (compile error)
+  - `socket.readpartial(n)` — compiles but blocks until peer closes (FIN), not suitable for HTTP servers
+  - `Socket` (raw), `UDPSocket`, `UNIXSocket` — NOT available (runtime `NameError`)
+  - None of `TCPSocket`/`TCPServer`/`Socket` are accessible as Ruby constants (`defined?` returns nil)
+  - For HTTP servers use `lib/socket_tcp.rb` (adds `TCPServer.open` + `recv` via `sp_net_*`, no gate needed)
+  - For raw `Socket`/UDP/Unix use `lib/socket_shim.rb`
 - `json`
 - `base64`
 - `digest`
@@ -226,7 +237,7 @@ Common libraries that Ruby programmers reach for but Spinel does not ship:
 - `observer`
 - `singleton`
 - `net/http`, `net/protocol`, and other `net/*` libraries
-- `socket` — see "Require Works" section above; natively available but with significant limitations for server use
+- `socket` — partially works; see "Require Works" section for full breakdown. Raw `Socket`, `UDPSocket`, `UNIXSocket` are not available natively.
 - `uri`
 - `cgi`
 - `erb` (loads but crashes at compile)
@@ -506,6 +517,42 @@ Only use `.dup` when `s` is already a typed `const char *` and you need a copy.
   hint in `initialize` — `@arr = []; @arr.push(Element.new); @arr.pop`
 - Lambda closures degrade closed-over variable types to `sp_RbVal`. Extract
   the lambda body into a standalone method with explicit parameters instead.
+
+### User-defined `class TCPServer` must inherit from another user class
+
+Spinel has a built-in C struct type `sp_TCPServer`. If you define `class TCPServer`
+in Ruby with no parent, Spinel maps your class to that native struct. In `ensure`
+blocks, Spinel defensively initializes a null variable before the guarded code runs:
+
+```c
+sp_TCPServer lv__server = NULL;  // error: struct can't be NULL-initialized
+```
+
+This fails because `sp_TCPServer` is a value struct, not a pointer. The fix is to
+give your TCPServer class a user-defined parent so Spinel treats it as a regular Ruby
+object (pointer) instead of the native struct:
+
+```ruby
+class TCPSocket
+  def initialize(fd); @fd = fd; end
+  # ...
+end
+
+class TCPServer < TCPSocket  # inheritance breaks the sp_TCPServer mapping
+  def initialize(host_or_port, port = nil)
+    fd = SpinelTCP.sp_net_listen(port || host_or_port, 1)
+    super(fd)
+  end
+  # ...
+end
+```
+
+See `source/lib/socket_tcp.rb` for the full pattern.
+
+The same struct-collision concern applies to any user class named to match a
+Spinel built-in type (e.g. `TCPSocket`, `File`, `Array`). In practice TCPServer is
+the one that bites because it's the only one that appears in `ensure` blocks as a
+freshly-bound local variable.
 
 ## Array and Enumerable
 
@@ -797,7 +844,9 @@ Prefer these because they are supported and already fit Spinel's design:
 - Tokenizing/parsing: `require "strscan"`
 - Sets: `require "set"`
 - Static file work: `File.read`, `File.write`, `File.exist?`, `File.directory?`, `File.file?`, `File.size`, `File.join`, `File.basename`, `File.dirname`, `File.expand_path`
-- Networking: `require "socket"` gives native `TCPServer`/`TCPSocket` but `readpartial(n)` blocks until FIN — not usable for HTTP servers; use `lib/socket_shim.rb` for HTTP servers (its `recv` calls `sp_net_recv_some` which returns available data immediately) and for raw `Socket`, `UDPSocket`, `UNIXSocket`
+- Networking (HTTP servers): use `require_relative "lib/socket_tcp"` — wraps five `sp_net_*` built-in functions, works under both CRuby and Spinel, no C extension or `SPINEL_REQUIRE_GATE` needed; provides `TCPServer.open`, `server.accept`, `client.recv`, `client.write`, `client.close`
+- Networking (outbound client): `require "socket"` then `TCPSocket.new(host, port)`; `fileno` works, `recv` needs FFI via `fileno`
+- Networking (raw Socket / UDP / Unix): use `require_relative "lib/socket_shim.rb"` (full FFI-backed shim)
 - Reflection: use `send(:method_name)` with literal symbol names; `obj.method(:name).call`; `obj.respond_to?(:name)`; `&:method_name`
 - Process info: `` `id -u`.strip.to_i `` instead of `Process.uid`
 
